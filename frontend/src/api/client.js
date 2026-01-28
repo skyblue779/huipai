@@ -69,10 +69,37 @@ const createStage = (data) => request('POST', '/api/stage/create', data);
 const updateStage = (dataId, data) => request('PUT', `/api/stage/update/${dataId}`, data);
 const deleteStage = (dataId) => request('DELETE', `/api/stage/delete/${dataId}`);
 
+const listProjectProgress = ({ skip = 0, limit = 300, search = '', projectCode = '', projectName = '' } = {}) => {
+  const params = new URLSearchParams({
+    skip: String(skip),
+    limit: String(limit)
+  });
+  if (search) {
+    params.set('search', search);
+  }
+  if (projectCode) {
+    params.set('project_code', projectCode);
+  }
+  if (projectName) {
+    params.set('project_name', projectName);
+  }
+  return request('GET', `/api/progress/list?${params.toString()}`);
+};
+
+const createProjectProgress = (data) => request('POST', '/api/progress/create', data);
+const updateProjectProgress = (dataId, data) => request('PUT', `/api/progress/update/${dataId}`, data);
+const deleteProjectProgress = (dataId) => request('DELETE', `/api/progress/delete/${dataId}`);
+const uploadProjectProgressFiles = (files) => request('POST', '/api/progress/upload', files);
+
 export default {
   listProjectTypes,
   listStages,
   createStage,
   updateStage,
-  deleteStage
+  deleteStage,
+  listProjectProgress,
+  createProjectProgress,
+  updateProjectProgress,
+  deleteProjectProgress,
+  uploadProjectProgressFiles
 };

@@ -1,0 +1,182 @@
+"""
+Project progress API routes.
+"""
+import logging
+from flask import Blueprint, request, jsonify
+from api.online_office import api_client
+from field_mapping import PROJECT_PROGRESS_FIELDS_EN
+
+logger = logging.getLogger(__name__)
+
+progress_bp = Blueprint('progress', __name__, url_prefix='/api/progress')
+
+
+@progress_bp.route('/list', methods=['GET'])
+def list_project_progress():
+    """List project progress records."""
+    try:
+        skip = request.args.get('skip', 0, type=int)
+        limit = request.args.get('limit', 300, type=int)
+        search = request.args.get('search', '', type=str)
+        project_code = request.args.get('project_code', '', type=str)
+        project_name = request.args.get('project_name', '', type=str)
+
+        filter_obj = None
+        cond = []
+
+        if project_code:
+            cond.append({
+                'field': PROJECT_PROGRESS_FIELDS_EN['project_code'],
+                'method': 'like',
+                'value': [project_code]
+            })
+
+        if project_name:
+            cond.append({
+                'field': PROJECT_PROGRESS_FIELDS_EN['project_name'],
+                'method': 'like',
+                'value': [project_name]
+            })
+
+        if search:
+            filter_obj = {
+                'rel': 'or',
+                'cond': [
+                    {
+                        'field': PROJECT_PROGRESS_FIELDS_EN['project_name'],
+                        'method': 'like',
+                        'value': [search]
+                    },
+                    {
+                        'field': PROJECT_PROGRESS_FIELDS_EN['project_code'],
+                        'method': 'like',
+                        'value': [search]
+                    }
+                ]
+            }
+        elif cond:
+            filter_obj = {
+                'rel': 'and',
+                'cond': cond
+            }
+
+        items = api_client.list_project_progress(skip=skip, limit=limit, filter_obj=filter_obj)
+        return jsonify({
+            'code': 200,
+            'msg': '成功',
+            'data': items,
+            'total': len(items)
+        })
+    except Exception as e:
+        logger.error(f"获取项目进度列表失败: {e}")
+        return jsonify({
+            'code': 500,
+            'msg': str(e)
+        }), 500
+
+
+@progress_bp.route('/get/<data_id>', methods=['GET'])
+def get_project_progress(data_id):
+    """Get a single progress record."""
+    try:
+        item = api_client.get_project_progress(data_id)
+        return jsonify({
+            'code': 200,
+            'msg': '成功',
+            'data': item
+        })
+    except Exception as e:
+        logger.error(f"获取项目进度失败: {e}")
+        return jsonify({
+            'code': 500,
+            'msg': str(e)
+        }), 500
+
+
+@progress_bp.route('/create', methods=['POST'])
+def create_project_progress():
+    """Create a progress record."""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({
+                'code': 400,
+                'msg': '请提供数据'
+            }), 400
+        result = api_client.create_project_progress(data)
+        return jsonify({
+            'code': 200,
+            'msg': '创建成功',
+            'data': result
+        })
+    except Exception as e:
+        logger.error(f"创建项目进度失败: {e}")
+        return jsonify({
+            'code': 500,
+            'msg': str(e)
+        }), 500
+
+
+@progress_bp.route('/update/<data_id>', methods=['PUT'])
+def update_project_progress(data_id):
+    """Update a progress record."""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({
+                'code': 400,
+                'msg': '请提供数据'
+            }), 400
+        result = api_client.update_project_progress(data_id, data)
+        return jsonify({
+            'code': 200,
+            'msg': '更新成功',
+            'data': result
+        })
+    except Exception as e:
+        logger.error(f"更新项目进度失败: {e}")
+        return jsonify({
+            'code': 500,
+            'msg': str(e)
+        }), 500
+
+
+@progress_bp.route('/delete/<data_id>', methods=['DELETE'])
+def delete_project_progress(data_id):
+    """Delete a progress record."""
+    try:
+        api_client.delete_project_progress(data_id)
+        return jsonify({
+            'code': 200,
+            'msg': '删除成功'
+        })
+    except Exception as e:
+        logger.error(f"删除项目进度失败: {e}")
+        return jsonify({
+            'code': 500,
+            'msg': str(e)
+        }), 500
+
+
+@progress_bp.route('/upload', methods=['POST'])
+def upload_project_progress_files():
+    """Upload file metadata for progress attachments."""
+    try:
+        files = request.get_json()
+        if not isinstance(files, list):
+            return jsonify({
+                'code': 400,
+                'msg': '请提供文件列表'
+            }), 400
+        result = api_client.upload_project_progress_files(files)
+        return jsonify({
+            'code': 200,
+            'msg': '成功',
+            'data': result
+        })
+    except Exception as e:
+        logger.error(f"上传文件失败: {e}")
+        return jsonify({
+            'code': 500,
+            'msg': str(e)
+        }), 500

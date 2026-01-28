@@ -21,6 +21,8 @@ PROJECT_ENTRY_ID = 'e8894672999be041d2d1c4f1'
 # 项目类型表
 PROJECT_TYPE_ENTRY_ID = '6e32422ead05c1ce9790f812'
 
+PROJECT_PROGRESS_ENTRY_ID = '11714a488b65fc5074a981cd'
+
 # CORS配置
 CORS_ORIGINS = ['http://localhost:3000', 'http://localhost:8080', 'http://127.0.0.1:5000']
 

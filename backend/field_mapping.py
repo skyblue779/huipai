@@ -54,6 +54,24 @@ PROJECT_FIELDS = {
 # 反向映射：从字段别名到中文名称
 STAGE_CONFIG_REVERSE = {v: k for k, v in STAGE_CONFIG_FIELDS.items()}
 STAGE_CONFIG_REVERSE_EN = {v: k for k, v in STAGE_CONFIG_FIELDS_EN.items()}
+PROJECT_PROGRESS_FIELDS_EN = {
+    'project_code': '_widget_1769239633492',
+    'project_name': '_widget_1769239633511',
+    'project_type': '_widget_1769239633530',
+    'main_stage': '_widget_1769239633707',
+    'project_stage': '_widget_1769239633603',
+    'executor': '_widget_1769239633622',
+    'plan_time': '_widget_1769239633640',
+    'actual_finish': '_widget_1769239633664',
+    'status': '_widget_1769239633688',
+    'site_upload': '_widget_1769411917447',
+    'execution_note': '_widget_1769411917532',
+    'overdue_reason': '_widget_1769411917651',
+    'warning_level': '_widget_1769570424734',
+}
+
+PROJECT_PROGRESS_REVERSE_EN = {v: k for k, v in PROJECT_PROGRESS_FIELDS_EN.items()}
+
 PROJECT_REVERSE = {v: k for k, v in PROJECT_FIELDS.items()}
 
 

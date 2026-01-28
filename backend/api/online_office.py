@@ -5,8 +5,14 @@ import requests
 import logging
 from typing import Dict, List, Optional, Any
 from config import (
-    ONLINE_OFFICE_BASE_URL, APP_ID, API_KEY, STAGE_CONFIG_ENTRY_ID, 
-    PROJECT_ENTRY_ID, PROJECT_TYPE_ENTRY_ID, REQUEST_TIMEOUT
+    ONLINE_OFFICE_BASE_URL,
+    APP_ID,
+    API_KEY,
+    STAGE_CONFIG_ENTRY_ID,
+    PROJECT_ENTRY_ID,
+    PROJECT_TYPE_ENTRY_ID,
+    PROJECT_PROGRESS_ENTRY_ID,
+    REQUEST_TIMEOUT
 )
 from field_mapping import (
     FieldMapper,
@@ -14,6 +20,8 @@ from field_mapping import (
     STAGE_CONFIG_FIELDS_EN,
     STAGE_CONFIG_REVERSE_EN,
     PROJECT_TYPE_REVERSE_EN,
+    PROJECT_PROGRESS_FIELDS_EN,
+    PROJECT_PROGRESS_REVERSE_EN,
 )
 
 logger = logging.getLogger(__name__)
@@ -183,6 +191,63 @@ class OnlineOfficeAPI:
             'operator': ''
         })
         return True
+
+    # ==================== Project progress operations ====================
+
+    def create_project_progress(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        mapped_data = FieldMapper.map_to_alias(data, PROJECT_PROGRESS_FIELDS_EN)
+        url = self._build_url(PROJECT_PROGRESS_ENTRY_ID, 'data_create')
+        result = self._request('POST', url, json={'data': mapped_data})
+        return FieldMapper.map_from_alias(result.get('data', {}), PROJECT_PROGRESS_REVERSE_EN)
+
+    def get_project_progress(self, data_id: str) -> Dict[str, Any]:
+        url = self._build_url(PROJECT_PROGRESS_ENTRY_ID, 'data_retrieve')
+        result = self._request('POST', url, json={'data_id': data_id})
+        data = result.get('data', {})
+        return FieldMapper.map_from_alias(data, PROJECT_PROGRESS_REVERSE_EN)
+
+    def list_project_progress(
+        self,
+        skip: int = 0,
+        limit: int = 300,
+        filter_obj: Optional[Dict] = None
+    ) -> List[Dict]:
+        url = self._build_url(PROJECT_PROGRESS_ENTRY_ID, 'data')
+        payload = {
+            'skip': skip,
+            'limit': limit
+        }
+        if filter_obj:
+            payload['filter'] = filter_obj
+        result = self._request('POST', url, json=payload)
+        return [
+            FieldMapper.map_from_alias(item, PROJECT_PROGRESS_REVERSE_EN)
+            for item in result.get('data', [])
+        ]
+
+    def update_project_progress(self, data_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
+        supported_fields = {k: v for k, v in PROJECT_PROGRESS_FIELDS_EN.items() if k in data}
+        mapped_data = FieldMapper.map_to_alias(data, supported_fields)
+        url = self._build_url(PROJECT_PROGRESS_ENTRY_ID, 'data_update')
+        result = self._request('POST', url, json={
+            'data_id': data_id,
+            'data': mapped_data
+        })
+        return FieldMapper.map_from_alias(result.get('data', {}), PROJECT_PROGRESS_REVERSE_EN)
+
+    def delete_project_progress(self, data_id: str) -> bool:
+        url = self._build_url(PROJECT_PROGRESS_ENTRY_ID, 'data_delete')
+        self._request('POST', url, json={
+            'data_id': data_id,
+            'is_start_event': False,
+            'operator': ''
+        })
+        return True
+
+    def upload_project_progress_files(self, files: List[Dict[str, str]]) -> List[Dict[str, Any]]:
+        url = self._build_url(PROJECT_PROGRESS_ENTRY_ID, 'upload_file')
+        result = self._request('POST', url, json=files)
+        return result.get('data', [])
 
 # 全局API实例
 api_client = OnlineOfficeAPI()

@@ -1,7 +1,3 @@
-﻿<template>
-  <StageConfig />
+<template>
+  <router-view />
 </template>
-
-<script setup>
-import StageConfig from './pages/StageConfig.vue';
-</script>
