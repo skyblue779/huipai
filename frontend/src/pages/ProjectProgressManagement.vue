@@ -4,6 +4,19 @@
       <div class="progress-visual-card">
         <div class="visual-header">
           <div class="search-row">
+            <el-select
+              v-model="currentProjectKey"
+              placeholder="选择项目"
+              filterable
+              style="width: 240px"
+            >
+              <el-option
+                v-for="item in projectOptions"
+                :key="item.key"
+                :label="item.label"
+                :value="item.key"
+              />
+            </el-select>
             <el-input
               v-model="searchQuery"
               placeholder="搜索项目名称/编号..."
@@ -89,9 +102,9 @@
           </div>
         </div>
         <div class="dashboard-card">
-          <div class="card-label">三级预警(严重)</div>
+          <div class="card-label">预警数量</div>
           <div class="card-value accent-danger">
-            {{ level3WarningCount }}
+            {{ warningLevelCount }}
             <span class="muted">个</span>
           </div>
         </div>
@@ -101,95 +114,86 @@
         <div class="table-header">
           <div class="table-title">
             <h3>项目节点执行明细</h3>
-            <el-radio-group v-model="activeView" size="small">
-              <el-radio-button label="list">列表视图</el-radio-button>
-              <el-radio-button label="gantt">甘特图</el-radio-button>
-            </el-radio-group>
           </div>
-          <el-button type="primary" link :icon="Download">导出进度详情</el-button>
         </div>
 
         <el-table
-          v-if="activeView === 'list'"
-          :data="timelineNodes"
+          :data="tableRows"
           style="width: 100%"
           stripe
           border
           v-loading="loading"
+          row-key="id"
+          :tree-props="{ children: 'children' }"
+          :default-expand-all="true"
+          :row-class-name="getRowClass"
         >
-          <el-table-column prop="name" label="阶段/节点名称" min-width="180" fixed="left" />
+          <el-table-column label="主阶段" min-width="180" fixed="left">
+            <template #default="{ row }">
+              <span v-if="row.isGroup" class="stage-group-title">{{ row.mainStageLabel || row.name }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="节点名称" min-width="220">
+            <template #default="{ row }">
+              <span v-if="row.isGroup" class="stage-node-count">{{ row.nodeCount }} 个节点</span>
+              <div v-else class="stage-node-item">
+                <span class="stage-node-dot"></span>
+                <span class="stage-node-text">{{ row.nodeLabel || row.name }}</span>
+              </div>
+            </template>
+          </el-table-column>
           <el-table-column label="当前状态" width="120" align="center">
             <template #default="{ row }">
-              <el-tag :type="getStatusTag(row.status)" effect="dark">
+              <el-tag v-if="!row.isGroup" :type="getStatusTag(row.status)" effect="dark">
                 {{ row.status || '未完成' }}
               </el-tag>
+              <span v-else class="stage-placeholder">--</span>
             </template>
           </el-table-column>
-          <el-table-column prop="planStart" label="计划开始日期" width="140" align="center" />
-          <el-table-column prop="planEnd" label="计划结束日期" width="140" align="center" />
+          <el-table-column label="计划开始日期" width="140" align="center">
+            <template #default="{ row }">
+              <span v-if="!row.isGroup">{{ row.planStart }}</span>
+              <span v-else class="stage-placeholder">--</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="计划结束日期" width="140" align="center">
+            <template #default="{ row }">
+              <span v-if="!row.isGroup">{{ row.planEnd }}</span>
+              <span v-else class="stage-placeholder">--</span>
+            </template>
+          </el-table-column>
           <el-table-column label="预警等级" width="130" align="center">
             <template #default="{ row }">
-              <el-tag :type="getWarningTag(row.warningLevel)" effect="plain">
+              <el-tag v-if="!row.isGroup" :type="getWarningTag(row.warningLevel)" effect="plain">
                 {{ row.warningLevel || '正常' }}
               </el-tag>
+              <span v-else class="stage-placeholder">--</span>
             </template>
           </el-table-column>
-          <el-table-column prop="executorName" label="责任人" width="140" align="center" />
-        </el-table>
-
-        <div v-show="activeView === 'gantt'" class="gantt-wrapper">
-          <div v-if="timelineNodes.length" ref="ganttRef" class="gantt-chart"></div>
-          <el-empty v-else description="暂无进度数据" />
-        </div>
+          <el-table-column label="责任人" width="140" align="center">
+            <template #default="{ row }">
+              <span v-if="!row.isGroup">{{ row.executorName }}</span>
+              <span v-else class="stage-placeholder">--</span>
+            </template>
+          </el-table-column>
+          </el-table>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch, nextTick, onBeforeUnmount } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import { ElMessage } from 'element-plus';
-import { Search, Check, WarningFilled, Flag, Download } from '@element-plus/icons-vue';
+import { Search, Check, WarningFilled, Flag } from '@element-plus/icons-vue';
 import api from '../api/client';
 
 const searchQuery = ref('');
-const activeView = ref('list');
 const loading = ref(false);
 const progressRecords = ref([]);
 const currentProjectKey = ref('');
-const ganttRef = ref(null);
-
-let chartInstance = null;
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
-
-const ensureEcharts = (() => {
-  let loader = null;
-  return () => {
-    if (window.echarts) {
-      return Promise.resolve(window.echarts);
-    }
-    if (loader) {
-      return loader;
-    }
-    loader = new Promise((resolve, reject) => {
-      const existing = document.getElementById('echarts-script');
-      if (existing) {
-        existing.addEventListener('load', () => resolve(window.echarts));
-        existing.addEventListener('error', () => reject(new Error('ECharts加载失败')));
-        return;
-      }
-      const script = document.createElement('script');
-      script.id = 'echarts-script';
-      script.src = 'https://unpkg.com/echarts/dist/echarts.min.js';
-      script.async = true;
-      script.onload = () => resolve(window.echarts);
-      script.onerror = () => reject(new Error('ECharts加载失败'));
-      document.head.appendChild(script);
-    });
-    return loader;
-  };
-})();
 
 const parseDateValue = (value) => {
   if (!value) return null;
@@ -255,6 +259,30 @@ const formatUser = (value) => {
   return String(value);
 };
 
+const normalizeLabel = (value) => {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string') return value.trim();
+  return String(value);
+};
+
+const normalizeOrderValue = (value) => {
+  if (value === null || value === undefined) return null;
+  const trimmed = String(value).trim();
+  if (!trimmed) return null;
+  const numeric = Number(trimmed);
+  if (Number.isFinite(numeric)) return numeric;
+  return trimmed;
+};
+
+const compareOrderValue = (a, b) => {
+  if (a === null || a === undefined) return b === null || b === undefined ? 0 : 1;
+  if (b === null || b === undefined) return -1;
+  const aIsNumber = typeof a === 'number' && Number.isFinite(a);
+  const bIsNumber = typeof b === 'number' && Number.isFinite(b);
+  if (aIsNumber && bIsNumber) return a - b;
+  return String(a).localeCompare(String(b), 'zh');
+};
+
 const groupedProjects = computed(() => {
   const map = new Map();
   progressRecords.value.forEach((item) => {
@@ -311,6 +339,17 @@ const currentProjectLabel = computed(() => {
   return code ? `${name} (${code})` : name;
 });
 
+const projectOptions = computed(() =>
+  groupedProjects.value.map((item) => {
+    const name = item.projectName || '未命名项目';
+    const code = item.projectCode ? ` (${item.projectCode})` : '';
+    return {
+      key: item.key,
+      label: `${name}${code}`
+    };
+  })
+);
+
 const normalizeNode = (record, index) => {
   const planRange = parseDateRange(record.plan_time);
   const actualDate = parseDateValue(record.actual_finish);
@@ -323,33 +362,79 @@ const normalizeNode = (record, index) => {
     planEndDate = new Date(planStartDate.getTime() + ONE_DAY_MS);
   }
 
-  const stageName = record.project_stage || record.stage || record.main_stage || `节点${index + 1}`;
+  const mainStageLabel = normalizeLabel(record.main_stage || record.mainStage);
+  const projectStageLabel = normalizeLabel(record.project_stage || record.projectStage || record.stage);
+  const fallbackLabel = projectStageLabel || mainStageLabel || `节点${index + 1}`;
+  const nodeLabel = projectStageLabel || (!mainStageLabel ? fallbackLabel : '');
 
   return {
     id: record._id || `${index}`,
-    name: stageName,
+    name: fallbackLabel,
+    mainStageLabel,
+    nodeLabel,
+    mainStageOrder: normalizeOrderValue(record.main_stage_order),
+    projectStageOrder: normalizeOrderValue(record.project_stage_order),
     status: record.status || '未完成',
     warningLevel: record.warning_level || '正常',
     executorName: formatUser(record.executor),
     planStart: formatDate(planStartDate || record.plan_time),
     planEnd: formatDate(planEndDate || record.actual_finish),
-    planStartRaw: planStartDate,
-    planEndRaw: planEndDate,
-    isMilestone: Boolean(record.main_stage) && record.main_stage === stageName
+    planStartSort: planStartDate ? planStartDate.getTime() : null,
+    originalIndex: index,
+    isMilestone: isDone(record.status || '未完成')
   };
 };
 
 const timelineNodes = computed(() => {
-  const nodes = currentProject.value.records
-    .slice()
-    .sort((a, b) => {
-      const dateA = parseDateValue(parseDateRange(a.plan_time).start || a.plan_time);
-      const dateB = parseDateValue(parseDateRange(b.plan_time).start || b.plan_time);
-      if (!dateA || !dateB) return 0;
-      return dateA - dateB;
-    })
-    .map((record, index) => normalizeNode(record, index));
+  const nodes = currentProject.value.records.map((record, index) => normalizeNode(record, index));
+  nodes.sort((a, b) => {
+    const mainCompare = compareOrderValue(a.mainStageOrder, b.mainStageOrder);
+    if (mainCompare !== 0) return mainCompare;
+    const projectCompare = compareOrderValue(a.projectStageOrder, b.projectStageOrder);
+    if (projectCompare !== 0) return projectCompare;
+    const dateCompare = compareOrderValue(a.planStartSort, b.planStartSort);
+    if (dateCompare !== 0) return dateCompare;
+    return a.originalIndex - b.originalIndex;
+  });
   return nodes;
+});
+
+const tableRows = computed(() => {
+  const rows = [];
+  const groupMap = new Map();
+  timelineNodes.value.forEach((node, index) => {
+    const mainLabel = node.mainStageLabel;
+    if (!mainLabel) {
+      rows.push({
+        ...node,
+        id: `node-${node.id ?? index}`,
+        isGroup: false
+      });
+      return;
+    }
+    const key = `${mainLabel}||${node.mainStageOrder ?? ''}`;
+    let group = groupMap.get(key);
+    if (!group) {
+      group = {
+        id: `group-${groupMap.size}-${String(mainLabel)}`,
+        isGroup: true,
+        name: mainLabel,
+        mainStageLabel: mainLabel,
+        mainStageOrder: node.mainStageOrder,
+        children: [],
+        nodeCount: 0
+      };
+      groupMap.set(key, group);
+      rows.push(group);
+    }
+    group.children.push({
+      ...node,
+      id: `node-${node.id ?? `${index}`}`,
+      isGroup: false
+    });
+    group.nodeCount = group.children.length;
+  });
+  return rows;
 });
 
 const isDone = (status) => status === '完成' || status === '超期完成';
@@ -361,24 +446,24 @@ const overallProgress = computed(() => {
 });
 
 const totalWarningLevelCount = computed(
+  () => timelineNodes.value.filter((node) => node.status === '超期').length
+);
+const warningLevelCount = computed(
   () => timelineNodes.value.filter((node) => node.warningLevel && node.warningLevel !== '正常').length
 );
-const level3WarningCount = computed(
-  () => timelineNodes.value.filter((node) => node.warningLevel === '三级预警').length
-);
 
-const milestoneReachedCount = computed(
-  () => timelineNodes.value.filter((node) => node.isMilestone && isDone(node.status)).length
-);
-const milestoneTotalCount = computed(() => timelineNodes.value.filter((node) => node.isMilestone).length);
+const milestoneReachedCount = computed(() => timelineNodes.value.filter((node) => isDone(node.status)).length);
+const milestoneTotalCount = computed(() => timelineNodes.value.length);
 
-const overallProgressType = computed(() => (level3WarningCount.value > 0 ? 'danger' : 'primary'));
+const overallProgressType = computed(() => (warningLevelCount.value > 0 ? 'danger' : 'primary'));
 
 const getStatusTag = (status) => {
   if (status === '完成' || status === '超期完成') return 'success';
   if (status === '超期') return 'danger';
   return 'info';
 };
+
+const getRowClass = ({ row }) => (row.isGroup ? 'table-group-row' : '');
 
 const getWarningTag = (level) => {
   if (level === '三级预警') return 'danger';
@@ -414,127 +499,8 @@ const handleSearch = async () => {
   await loadProgressRecords(searchQuery.value.trim());
 };
 
-const renderGanttChart = async () => {
-  if (activeView.value !== 'gantt') return;
-  if (!ganttRef.value || !timelineNodes.value.length) return;
-
-  let echarts = null;
-  try {
-    echarts = await ensureEcharts();
-  } catch (error) {
-    ElMessage.error(error?.message || 'ECharts 加载失败');
-    return;
-  }
-
-  if (!chartInstance) {
-    chartInstance = echarts.init(ganttRef.value);
-  }
-
-  const nodes = timelineNodes.value.slice().reverse();
-  const names = nodes.map((node) => node.name);
-  const startTimeData = [];
-  const durationData = [];
-
-  nodes.forEach((node) => {
-    const start = node.planStartRaw || new Date();
-    const end = node.planEndRaw || new Date(start.getTime() + ONE_DAY_MS);
-    startTimeData.push(start);
-    durationData.push({
-      value: Math.max(end.getTime() - start.getTime(), ONE_DAY_MS),
-      itemStyle: {
-        color:
-          node.status === '超期'
-            ? '#f5222d'
-            : isDone(node.status)
-              ? '#52c41a'
-              : '#1890ff'
-      }
-    });
-  });
-
-  const option = {
-    tooltip: {
-      trigger: 'axis',
-      axisPointer: { type: 'shadow' },
-      formatter: (params) => {
-        const bar = params[1];
-        const node = nodes.find((item) => item.name === bar.name);
-        if (!node) return bar.name;
-        return `${bar.name}<br/>计划周期: ${node.planStart} 至 ${node.planEnd}<br/>状态: ${node.status}`;
-      }
-    },
-    grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
-    xAxis: {
-      type: 'time',
-      position: 'top',
-      axisLabel: { formatter: '{yyyy}-{MM}-{dd}' },
-      splitLine: { show: true }
-    },
-    yAxis: {
-      type: 'category',
-      data: names,
-      splitLine: { show: true }
-    },
-    series: [
-      {
-        name: '辅助',
-        type: 'bar',
-        stack: '总量',
-        itemStyle: { borderColor: 'rgba(0,0,0,0)', color: 'rgba(0,0,0,0)' },
-        emphasis: { itemStyle: { borderColor: 'rgba(0,0,0,0)', color: 'rgba(0,0,0,0)' } },
-        data: startTimeData
-      },
-      {
-        name: '计划周期',
-        type: 'bar',
-        stack: '总量',
-        data: durationData,
-        barWidth: 18
-      }
-    ]
-  };
-
-  chartInstance.setOption(option);
-  chartInstance.resize();
-};
-
-watch(activeView, (val) => {
-  if (val === 'gantt') {
-    nextTick(() => {
-      void renderGanttChart();
-    });
-  }
-});
-
-watch(
-  timelineNodes,
-  () => {
-    if (activeView.value === 'gantt') {
-      nextTick(() => {
-        void renderGanttChart();
-      });
-    }
-  },
-  { deep: true }
-);
-
-const handleResize = () => {
-  if (chartInstance) {
-    chartInstance.resize();
-  }
-};
-
 onMounted(async () => {
   await loadProgressRecords();
-  window.addEventListener('resize', handleResize);
-});
-
-onBeforeUnmount(() => {
-  window.removeEventListener('resize', handleResize);
-  if (chartInstance) {
-    chartInstance.dispose();
-    chartInstance = null;
-  }
 });
 </script>
 
@@ -766,13 +732,41 @@ onBeforeUnmount(() => {
   font-size: 16px;
 }
 
-.gantt-wrapper {
-  margin-top: 16px;
+:deep(.table-group-row) td {
+  background: #fafafa;
 }
 
-.gantt-chart {
-  width: 100%;
-  height: 480px;
+.stage-group-title {
+  font-weight: 600;
+  color: #303133;
+}
+
+.stage-node-count {
+  font-size: 12px;
+  color: #909399;
+}
+
+.stage-node-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #303133;
+}
+
+.stage-node-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #c0c4cc;
+  flex-shrink: 0;
+}
+
+.stage-node-text {
+  line-height: 1.2;
+}
+
+.stage-placeholder {
+  color: #c0c4cc;
 }
 
 @media (max-width: 1200px) {
