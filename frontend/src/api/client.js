@@ -91,6 +91,9 @@ const updateProjectProgress = (dataId, data) => request('PUT', `/api/progress/up
 const deleteProjectProgress = (dataId) => request('DELETE', `/api/progress/delete/${dataId}`);
 const uploadProjectProgressFiles = (files) => request('POST', '/api/progress/upload', files);
 
+const listUsers = () => request('GET', '/api/user/list');
+const getUserInfo = (userId) => request('GET', `/api/user/info/${userId}`);
+
 export default {
   listProjectTypes,
   listStages,
@@ -101,5 +104,7 @@ export default {
   createProjectProgress,
   updateProjectProgress,
   deleteProjectProgress,
-  uploadProjectProgressFiles
+  uploadProjectProgressFiles,
+  listUsers,
+  getUserInfo
 };

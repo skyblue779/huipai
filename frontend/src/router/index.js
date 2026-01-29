@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import StageConfig from '../pages/StageConfig.vue';
 import ProjectProgressManagement from '../pages/ProjectProgressManagement.vue';
+import ProjectExecution from '../pages/ProjectExecution.vue';
 
 const routes = [
   {
@@ -16,6 +17,11 @@ const routes = [
     path: '/project-progress',
     name: 'ProjectProgress',
     component: ProjectProgressManagement
+  },
+  {
+    path: '/project-execution',
+    name: 'ProjectExecution',
+    component: ProjectExecution
   }
 ];
 

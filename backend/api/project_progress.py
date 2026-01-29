@@ -11,6 +11,25 @@ logger = logging.getLogger(__name__)
 progress_bp = Blueprint('progress', __name__, url_prefix='/api/progress')
 
 
+def _normalize_executor(value):
+    if value is None:
+        return value
+    if isinstance(value, list):
+        normalized = []
+        for item in value:
+            if isinstance(item, dict):
+                user_id = item.get('user_id') or item.get('_id') or item.get('id')
+                if user_id:
+                    normalized.append(str(user_id))
+            elif item:
+                normalized.append(str(item))
+        return normalized
+    if isinstance(value, dict):
+        user_id = value.get('user_id') or value.get('_id') or value.get('id')
+        return [str(user_id)] if user_id else []
+    return [str(value)]
+
+
 @progress_bp.route('/list', methods=['GET'])
 def list_project_progress():
     """List project progress records."""
@@ -103,6 +122,8 @@ def create_project_progress():
                 'code': 400,
                 'msg': '请提供数据'
             }), 400
+        if 'executor' in data:
+            data['executor'] = _normalize_executor(data.get('executor'))
         result = api_client.create_project_progress(data)
         return jsonify({
             'code': 200,
@@ -127,6 +148,8 @@ def update_project_progress(data_id):
                 'code': 400,
                 'msg': '请提供数据'
             }), 400
+        if 'executor' in data:
+            data['executor'] = _normalize_executor(data.get('executor'))
         result = api_client.update_project_progress(data_id, data)
         return jsonify({
             'code': 200,

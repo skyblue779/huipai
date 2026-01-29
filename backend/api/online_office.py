@@ -249,5 +249,17 @@ class OnlineOfficeAPI:
         result = self._request('POST', url, json=files)
         return result.get('data', [])
 
+    # ==================== User directory operations ====================
+
+    def list_users(self) -> List[Dict[str, Any]]:
+        url = f"{self.base_url}/user/user_list"
+        result = self._request('POST', url, json={})
+        return result.get('users', [])
+
+    def get_user_info(self, user_id: str) -> Dict[str, Any]:
+        url = f"{self.base_url}/user/user_info"
+        result = self._request('POST', url, json={'user_id': user_id})
+        return result.get('user', {})
+
 # 全局API实例
 api_client = OnlineOfficeAPI()

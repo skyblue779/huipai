@@ -1,5 +1,6 @@
 <template>
-  <div class="main-content">
+  <div class="page-root">
+    <div class="main-content">
     <div class="page-container">
       <div class="progress-visual-card">
         <div class="visual-header">
@@ -17,7 +18,7 @@
                 :value="item.key"
               />
             </el-select>
-            <el-input
+            <!-- <el-input
               v-model="searchQuery"
               placeholder="搜索项目名称/编号..."
               style="width: 240px"
@@ -26,7 +27,7 @@
               <template #prefix>
                 <el-icon><Search /></el-icon>
               </template>
-            </el-input>
+            </el-input> -->
             <el-button type="primary" :loading="loading" @click="handleSearch">查询</el-button>
           </div>
 
@@ -43,16 +44,9 @@
         </div>
 
         <div v-if="timelineNodes.length" class="segmented-timeline-wrapper">
-          <div class="segmented-track">
-            <div
-              v-for="(node, index) in timelineNodes"
-              :key="`${node.id || index}`"
-              class="segment-block"
-              :class="{
-                'is-done': isDone(node.status),
-                'is-overdue': node.status === '超期'
-              }"
-            ></div>
+
+          <div class="segmented-progress">
+            <div class="segmented-progress__fill" :style="{ width: `${overallProgress}%` }"></div>
           </div>
 
           <div class="node-markers">
@@ -87,25 +81,44 @@
 
       <div class="dashboard-grid">
         <div class="dashboard-card">
-          <div class="card-label">整体进度</div>
+          <div class="card-header">
+            <div class="card-icon is-primary">
+              <el-icon><TrendCharts /></el-icon>
+            </div>
+            <div class="card-label">整体进度</div>
+          </div>
           <div class="card-value accent-blue">{{ overallProgress }}%</div>
         </div>
         <div class="dashboard-card">
-          <div class="card-label">预警节点总数</div>
+          <div class="card-header">
+            <div class="card-icon is-danger">
+              <el-icon><WarningFilled /></el-icon>
+            </div>
+            <div class="card-label">预警节点总数(个)</div>
+          </div>
           <div class="card-value accent-danger">{{ totalWarningLevelCount }}</div>
         </div>
         <div class="dashboard-card">
-          <div class="card-label">里程碑达成</div>
+          <div class="card-header">
+            <div class="card-icon is-warning">
+              <el-icon><Flag /></el-icon>
+            </div>
+            <div class="card-label">里程碑达成</div>
+          </div>
           <div class="card-value accent-warning">
             {{ milestoneReachedCount }}
             <span class="muted">/ {{ milestoneTotalCount }}</span>
           </div>
         </div>
         <div class="dashboard-card">
-          <div class="card-label">预警数量</div>
+          <div class="card-header">
+            <div class="card-icon is-danger">
+              <el-icon><Bell /></el-icon>
+            </div>
+            <div class="card-label">预警数量(个)</div>
+          </div>
           <div class="card-value accent-danger">
             {{ warningLevelCount }}
-            <span class="muted">个</span>
           </div>
         </div>
       </div>
@@ -145,7 +158,7 @@
           <el-table-column label="当前状态" width="120" align="center">
             <template #default="{ row }">
               <el-tag v-if="!row.isGroup" :type="getStatusTag(row.status)" effect="dark">
-                {{ row.status || '未完成' }}
+                {{ displayStatus(row.status) }}
               </el-tag>
               <span v-else class="stage-placeholder">--</span>
             </template>
@@ -176,24 +189,76 @@
               <span v-else class="stage-placeholder">--</span>
             </template>
           </el-table-column>
+          <el-table-column label="操作" width="120" align="center" fixed="right">
+            <template #default="{ row }">
+              <el-button v-if="!row.isGroup" type="primary" link @click="openEditDialog(row)">编辑</el-button>
+              <span v-else class="stage-placeholder">--</span>
+            </template>
+          </el-table-column>
           </el-table>
       </div>
     </div>
+  </div>
+
+    <el-dialog v-model="editDialogVisible" title="编辑节点" width="520px">
+    <el-form label-width="110px">
+      <el-form-item label="计划开始日期">
+        <el-date-picker
+          v-model="editForm.planStart"
+          type="date"
+          value-format="YYYY-MM-DD"
+          placeholder="请选择日期"
+          style="width: 100%"
+        />
+      </el-form-item>
+      <el-form-item label="责任人">
+        <el-select
+          v-model="editForm.executorIds"
+          multiple
+          collapse-tags
+          collapse-tags-tooltip
+          filterable
+          placeholder="请选择成员"
+          style="width: 100%"
+          :loading="memberLoading"
+        >
+          <el-option
+            v-for="item in memberOptions"
+            :key="item.id"
+            :label="item.label"
+            :value="item.id"
+          />
+        </el-select>
+      </el-form-item>
+    </el-form>
+    <template #footer>
+      <el-button @click="editDialogVisible = false">取消</el-button>
+      <el-button type="primary" :loading="savingEdit" @click="handleSaveEdit">保存</el-button>
+    </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue';
 import { ElMessage } from 'element-plus';
-import { Search, Check, WarningFilled, Flag } from '@element-plus/icons-vue';
+import { Search, Check, WarningFilled, Flag, TrendCharts, Bell } from '@element-plus/icons-vue';
 import api from '../api/client';
 
 const searchQuery = ref('');
 const loading = ref(false);
 const progressRecords = ref([]);
 const currentProjectKey = ref('');
-
-const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+const editDialogVisible = ref(false);
+const savingEdit = ref(false);
+const editForm = ref({
+  planStart: '',
+  executorIds: []
+});
+const editRow = ref(null);
+const originalExecutorIds = ref([]);
+const members = ref([]);
+const memberLoading = ref(false);
 
 const parseDateValue = (value) => {
   if (!value) return null;
@@ -244,7 +309,15 @@ const formatDate = (value) => {
   }
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return String(value);
-  return date.toISOString().slice(0, 10);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const formatDateCell = (value) => {
+  if (!value) return '';
+  return formatDate(value);
 };
 
 const formatUser = (value) => {
@@ -258,6 +331,71 @@ const formatUser = (value) => {
   }
   return String(value);
 };
+
+const getExecutorIds = (value) => {
+  if (!value) return [];
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => {
+        if (!item) return '';
+        if (typeof item === 'object') return item.user_id || item._id || item.id || '';
+        return String(item);
+      })
+      .filter(Boolean);
+  }
+  if (typeof value === 'object') {
+    return [value.user_id || value._id || value.id || ''].filter(Boolean);
+  }
+  return [String(value)];
+};
+
+const updatePlanTimeValue = (rawValue, newStart, fallbackEnd) => {
+  if (!newStart) return rawValue;
+  const formatEnd = (value) => {
+    if (!value) return null;
+    if (typeof value === 'string') return value.replace(/\//g, '-');
+    return formatDate(value);
+  };
+  if (Array.isArray(rawValue)) {
+    const end = formatEnd(rawValue[1] || fallbackEnd);
+    return end ? [newStart, end] : [newStart];
+  }
+  if (rawValue && typeof rawValue === 'object') {
+    const updated = { ...rawValue };
+    if ('start' in updated) updated.start = newStart;
+    else if ('begin' in updated) updated.begin = newStart;
+    else if ('planStart' in updated) updated.planStart = newStart;
+    else updated.start = newStart;
+    const endValue = updated.end || updated.finish || updated.planEnd || fallbackEnd;
+    if ('end' in updated) updated.end = formatEnd(endValue) || updated.end;
+    if ('finish' in updated) updated.finish = formatEnd(endValue) || updated.finish;
+    if ('planEnd' in updated) updated.planEnd = formatEnd(endValue) || updated.planEnd;
+    return updated;
+  }
+  if (typeof rawValue === 'string') {
+    const matches = rawValue.match(/\d{4}[-/]\d{1,2}[-/]\d{1,2}/g);
+    if (matches && matches.length >= 2) {
+      const end = formatEnd(matches[1]);
+      return end ? `${newStart} - ${end}` : newStart;
+    }
+    return newStart;
+  }
+  return newStart;
+};
+
+const normalizeIdList = (ids) =>
+  (Array.isArray(ids) ? ids : [])
+    .map((id) => String(id).trim())
+    .filter(Boolean)
+    .sort();
+
+const memberOptions = computed(() =>
+  members.value.map((item) => ({
+    id: item.user_id,
+    label: `${item.name || '未命名'}${item.account ? ` (${item.account})` : ''}`
+  }))
+);
+
 
 const normalizeLabel = (value) => {
   if (value === null || value === undefined) return '';
@@ -318,6 +456,7 @@ watch(
   { immediate: true }
 );
 
+
 const currentProject = computed(() => {
   if (!groupedProjects.value.length) {
     return {
@@ -352,15 +491,8 @@ const projectOptions = computed(() =>
 
 const normalizeNode = (record, index) => {
   const planRange = parseDateRange(record.plan_time);
-  const actualDate = parseDateValue(record.actual_finish);
-  const planStartDate = planRange.start || actualDate;
-  let planEndDate = planRange.end || actualDate || planStartDate;
-  if (planStartDate && planEndDate && planEndDate <= planStartDate) {
-    planEndDate = new Date(planStartDate.getTime() + ONE_DAY_MS);
-  }
-  if (planStartDate && !planEndDate) {
-    planEndDate = new Date(planStartDate.getTime() + ONE_DAY_MS);
-  }
+  const planStartDate = planRange.start || null;
+  const planEndDate = planRange.end || null;
 
   const mainStageLabel = normalizeLabel(record.main_stage || record.mainStage);
   const projectStageLabel = normalizeLabel(record.project_stage || record.projectStage || record.stage);
@@ -369,6 +501,7 @@ const normalizeNode = (record, index) => {
 
   return {
     id: record._id || `${index}`,
+    recordId: record._id,
     name: fallbackLabel,
     mainStageLabel,
     nodeLabel,
@@ -377,8 +510,12 @@ const normalizeNode = (record, index) => {
     status: record.status || '未完成',
     warningLevel: record.warning_level || '正常',
     executorName: formatUser(record.executor),
-    planStart: formatDate(planStartDate || record.plan_time),
-    planEnd: formatDate(planEndDate || record.actual_finish),
+    executorRaw: record.executor,
+    rawPlanTime: record.plan_time,
+    planStartRaw: planStartDate,
+    planEndRaw: planEndDate,
+    planStart: formatDateCell(planStartDate),
+    planEnd: formatDateCell(planEndDate),
     planStartSort: planStartDate ? planStartDate.getTime() : null,
     originalIndex: index,
     isMilestone: isDone(record.status || '未完成')
@@ -463,6 +600,11 @@ const getStatusTag = (status) => {
   return 'info';
 };
 
+const displayStatus = (status) => {
+  if (status === '????') return '??';
+  return status || '???';
+};
+
 const getRowClass = ({ row }) => (row.isGroup ? 'table-group-row' : '');
 
 const getWarningTag = (level) => {
@@ -499,8 +641,104 @@ const handleSearch = async () => {
   await loadProgressRecords(searchQuery.value.trim());
 };
 
+const loadMembers = async () => {
+  if (memberLoading.value) return;
+  memberLoading.value = true;
+  try {
+    const result = await api.listUsers();
+    if (result?.code === 200 && Array.isArray(result.data)) {
+      members.value = result.data;
+    } else {
+      members.value = [];
+      ElMessage.error(result?.msg || '加载成员失败');
+    }
+  } catch (error) {
+    console.error('加载成员失败：', error);
+    members.value = [];
+    ElMessage.error('加载成员失败');
+  } finally {
+    memberLoading.value = false;
+  }
+};
+
+const openEditDialog = async (row) => {
+  if (!row || row.isGroup) return;
+  editRow.value = row;
+  const initialExecutorIds = getExecutorIds(row.executorRaw);
+  editForm.value = {
+    planStart: row.planStartRaw ? formatDate(row.planStartRaw) : row.planStart || '',
+    executorIds: initialExecutorIds
+  };
+  originalExecutorIds.value = [...initialExecutorIds];
+  editDialogVisible.value = true;
+  if (!members.value.length) {
+    await loadMembers();
+  }
+  const missingIds = (editForm.value.executorIds || []).filter(
+    (id) => !members.value.find((item) => item.user_id === id)
+  );
+  if (missingIds.length) {
+    members.value = [
+      ...members.value,
+      ...missingIds.map((id) => ({
+        user_id: id,
+        name: row.executorName || '未知成员'
+      }))
+    ];
+  }
+};
+
+const handleSaveEdit = async () => {
+  if (!editRow.value?.recordId) {
+    ElMessage.error('无法编辑：缺少记录ID');
+    return;
+  }
+  savingEdit.value = true;
+  try {
+    const payload = {};
+    if (editForm.value.planStart) {
+      payload.plan_time = updatePlanTimeValue(
+        editRow.value.rawPlanTime,
+        editForm.value.planStart,
+        editRow.value.planEndRaw
+      );
+    }
+    const currentExecutorIds = normalizeIdList(editForm.value.executorIds);
+    const originalIds = normalizeIdList(originalExecutorIds.value);
+    if (JSON.stringify(currentExecutorIds) !== JSON.stringify(originalIds)) {
+      payload.executor = currentExecutorIds;
+    }
+    if (Object.keys(payload).length === 0) {
+      ElMessage.warning('没有可更新的内容');
+      savingEdit.value = false;
+      return;
+    }
+    const result = await api.updateProjectProgress(editRow.value.recordId, payload);
+    if (result?.code === 200) {
+      ElMessage.success('更新成功');
+      editDialogVisible.value = false;
+      await loadProgressRecords(searchQuery.value.trim());
+    } else {
+      ElMessage.error(result?.msg || '更新失败');
+    }
+  } catch (error) {
+    console.error('更新失败：', error);
+    ElMessage.error('更新失败');
+  } finally {
+    savingEdit.value = false;
+  }
+};
+
 onMounted(async () => {
   await loadProgressRecords();
+  function getQueryParam(paramName) {
+    const urlParams = new URLSearchParams(window.location.search);
+    return urlParams.get(paramName);
+  }
+
+  // 1. 获取 ID
+  const userId = getQueryParam('webpage_user_id');
+  console.log('Webpage User ID:', userId);
 });
 </script>
 
@@ -550,43 +788,21 @@ onMounted(async () => {
 
 .segmented-timeline-wrapper {
   position: relative;
-  padding: 40px 10px 60px 10px;
-}
-
-.segmented-track {
-  display: flex;
-  height: 14px;
-  background: #f0f0f0;
-  border-radius: 7px;
-  gap: 6px;
-  padding: 3px;
-  margin-bottom: 15px;
-  overflow: hidden;
-}
-
-.segment-block {
-  flex: 1;
-  height: 100%;
-  border-radius: 4px;
-  background-color: #e8e8e8;
-  transition: all 0.4s ease;
-}
-
-.segment-block.is-done {
-  background-color: #52c41a;
-}
-
-.segment-block.is-overdue {
-  background-color: #ffccc7;
-  border: 1px dashed #f5222d;
+  padding: 32px 20px 64px 20px;
+  background: linear-gradient(180deg, #f7f8fb 0%, #ffffff 100%);
+  border: 1px solid rgba(60, 60, 67, 0.08);
+  border-radius: 16px;
+  box-shadow:
+    0 8px 24px rgba(15, 23, 42, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
 }
 
 .node-markers {
   display: flex;
   justify-content: space-between;
   position: absolute;
-  width: calc(100% - 20px);
-  top: 25px;
+  width: calc(100% - 40px);
+  top: 18px;
 }
 
 .marker-cell {
@@ -600,25 +816,30 @@ onMounted(async () => {
   width: 28px;
   height: 28px;
   background: #fff;
-  border: 2px solid #d9d9d9;
+  border: 1px solid rgba(60, 60, 67, 0.22);
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 2;
   position: relative;
+  box-shadow:
+    0 6px 12px rgba(15, 23, 42, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
 }
 
 .marker-dot.is-done {
-  border-color: #52c41a;
-  background: #52c41a;
+  border-color: #34c759;
+  background: #34c759;
   color: #fff;
+  box-shadow: 0 8px 14px rgba(52, 199, 89, 0.4);
 }
 
 .marker-dot.is-overdue {
-  border-color: #f5222d;
-  color: #f5222d;
-  background: #fff1f0;
+  border-color: #ff3b30;
+  color: #ff3b30;
+  background: #fff5f5;
+  box-shadow: 0 6px 12px rgba(255, 59, 48, 0.28);
 }
 
 .marker-label {
@@ -627,14 +848,15 @@ onMounted(async () => {
   transform: translateX(-50%);
   left: 50%;
   white-space: nowrap;
-  font-size: 13px;
-  color: #666;
+  font-size: 12px;
+  color: rgba(60, 60, 67, 0.85);
+  letter-spacing: 0.2px;
 }
 
 .marker-pending-dot {
   width: 6px;
   height: 6px;
-  background: #d9d9d9;
+  background: rgba(60, 60, 67, 0.4);
   border-radius: 50%;
   display: inline-block;
 }
@@ -642,10 +864,25 @@ onMounted(async () => {
 .node-flag-icon {
   position: absolute;
   top: -18px;
-  right: -10px;
-  color: #f5222d;
+  right: -12px;
+  color: #ff3b30;
   font-size: 16px;
   animation: wave 2s infinite ease-in-out;
+}
+
+.segmented-progress {
+  position: relative;
+  height: 6px;
+  border-radius: 999px;
+  background: #e5e5ea;
+  overflow: hidden;
+}
+
+.segmented-progress__fill {
+  height: 100%;
+  width: 0;
+  background: #34c759;
+  transition: width 0.6s ease;
 }
 
 @keyframes wave {
@@ -676,15 +913,48 @@ onMounted(async () => {
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
 .card-label {
   color: #8c8c8c;
   font-size: 14px;
-  margin-bottom: 12px;
+}
+
+.card-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+}
+
+.card-icon.is-primary {
+  background: rgba(24, 144, 255, 0.12);
+  color: #1890ff;
+}
+
+.card-icon.is-warning {
+  background: rgba(250, 140, 22, 0.14);
+  color: #fa8c16;
+}
+
+.card-icon.is-danger {
+  background: rgba(245, 34, 45, 0.12);
+  color: #f5222d;
 }
 
 .card-value {
   font-size: 28px;
   font-weight: bold;
+  padding-left: 12px;
 }
 
 .accent-blue {
@@ -768,6 +1038,7 @@ onMounted(async () => {
 .stage-placeholder {
   color: #c0c4cc;
 }
+
 
 @media (max-width: 1200px) {
   .dashboard-grid {
