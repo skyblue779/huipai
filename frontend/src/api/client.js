@@ -17,6 +17,22 @@ const buildUrl = (endpoint) => {
   return `${baseUrl}${normalizedEndpoint}`;
 };
 
+const parseResponse = async (response) => {
+  let payload = null;
+  try {
+    payload = await response.json();
+  } catch (error) {
+    payload = null;
+  }
+
+  if (!response.ok) {
+    const message = payload?.msg || `Request failed with status ${response.status}`;
+    throw new Error(message);
+  }
+
+  return payload;
+};
+
 const request = async (method, endpoint, data) => {
   const options = {
     method,
@@ -30,20 +46,16 @@ const request = async (method, endpoint, data) => {
   }
 
   const response = await fetch(buildUrl(endpoint), options);
-  let payload = null;
+  return parseResponse(response);
+};
 
-  try {
-    payload = await response.json();
-  } catch (error) {
-    payload = null;
-  }
-
-  if (!response.ok) {
-    const message = payload?.msg || `Request failed with status ${response.status}`;
-    throw new Error(message);
-  }
-
-  return payload;
+const requestForm = async (method, endpoint, formData) => {
+  const options = {
+    method,
+    body: formData
+  };
+  const response = await fetch(buildUrl(endpoint), options);
+  return parseResponse(response);
 };
 
 const listProjectTypes = ({ skip = 0, limit = 300 } = {}) => {
@@ -89,7 +101,12 @@ const listProjectProgress = ({ skip = 0, limit = 300, search = '', projectCode =
 const createProjectProgress = (data) => request('POST', '/api/progress/create', data);
 const updateProjectProgress = (dataId, data) => request('PUT', `/api/progress/update/${dataId}`, data);
 const deleteProjectProgress = (dataId) => request('DELETE', `/api/progress/delete/${dataId}`);
-const uploadProjectProgressFiles = (files) => request('POST', '/api/progress/upload', files);
+const uploadProjectProgressFiles = (files) => {
+  if (files instanceof FormData) {
+    return requestForm('POST', '/api/progress/upload', files);
+  }
+  return request('POST', '/api/progress/upload', files);
+};
 
 const listUsers = () => request('GET', '/api/user/list');
 const getUserInfo = (userId) => request('GET', `/api/user/info/${userId}`);

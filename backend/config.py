@@ -3,6 +3,9 @@
 """
 import os
 
+# Base dir
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 # Flask配置
 SECRET_KEY = os.getenv('SECRET_KEY', 'your-secret-key-here')
 DEBUG = os.getenv('DEBUG', True)
@@ -29,3 +32,7 @@ CORS_ORIGINS = ['http://localhost:3000', 'http://localhost:8080', 'http://127.0.
 # 请求超时
 REQUEST_TIMEOUT = 30
 
+
+# Uploads
+UPLOAD_DIR = os.getenv('UPLOAD_DIR', os.path.join(BASE_DIR, 'uploads'))
+PUBLIC_BASE_URL = os.getenv('PUBLIC_BASE_URL', '')

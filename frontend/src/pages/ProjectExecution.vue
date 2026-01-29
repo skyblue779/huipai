@@ -29,26 +29,46 @@
 
       <div class="summary-grid">
         <div class="summary-card">
-          <div class="summary-label">待执行</div>
-          <div class="summary-value accent-primary">{{ pendingCount }}</div>
+          <div class="summary-icon is-primary">
+            <el-icon><Bell /></el-icon>
+          </div>
+          <div class="summary-content">
+            <div class="summary-label">待执行</div>
+            <div class="summary-value accent-primary">{{ totalCount }}</div>
+          </div>
         </div>
         <div class="summary-card">
-          <div class="summary-label">已完成</div>
-          <div class="summary-value accent-success">{{ doneCount }}</div>
+          <div class="summary-icon is-warning">
+            <el-icon><Flag /></el-icon>
+          </div>
+          <div class="summary-content">
+            <div class="summary-label">未完成</div>
+            <div class="summary-value accent-warning">{{ waitingCount }}</div>
+          </div>
         </div>
         <div class="summary-card">
-          <div class="summary-label">超期</div>
-          <div class="summary-value accent-danger">{{ overdueCount }}</div>
+          <div class="summary-icon is-danger">
+            <el-icon><WarningFilled /></el-icon>
+          </div>
+          <div class="summary-content">
+            <div class="summary-label">超期</div>
+            <div class="summary-value accent-danger">{{ overdueCount }}</div>
+          </div>
         </div>
         <div class="summary-card">
-          <div class="summary-label">总阶段</div>
-          <div class="summary-value">{{ totalCount }}</div>
+          <div class="summary-icon is-neutral">
+            <el-icon><TrendCharts /></el-icon>
+          </div>
+          <div class="summary-content">
+            <div class="summary-label">总阶段</div>
+            <div class="summary-value">{{ totalCount }}</div>
+          </div>
         </div>
       </div>
 
       <div class="table-card desktop-only">
         <el-table
-          :data="tableRows"
+          :data="pagedRows"
           v-loading="loading"
           border
           stripe
@@ -93,43 +113,70 @@
         <div v-if="!tableRows.length && !loading" class="empty-holder">
           <el-empty :description="hasUserId ? '暂无可执行阶段' : '请通过业务入口访问'" />
         </div>
-        <div v-else class="mobile-card-list">
-          <div v-for="row in tableRows" :key="row.recordId" class="mobile-card">
-            <div class="mobile-card-header">
-              <div>
-                <div class="project-title">{{ row.projectLabel }}</div>
-                <div class="project-stage">{{ row.stageLabel }}</div>
-              </div>
-              <el-tag :type="getStatusTag(row.status)" effect="dark">
-                {{ row.status || '未完成' }}
-              </el-tag>
+        <div v-else class="mobile-group-list">
+          <div v-for="group in mobileGroups" :key="group.key" class="mobile-group">
+            <div class="mobile-group-header">
+              <div class="mobile-group-title">{{ group.title }}</div>
+              <div class="mobile-group-count">{{ group.rows.length }} 项</div>
             </div>
-            <div class="mobile-card-body">
-              <div class="mobile-info">
-                <span class="label">计划时间</span>
-                <span class="value">{{ formatRange(row.planStart, row.planEnd) }}</span>
+            <div class="mobile-card-list">
+              <div v-for="row in group.rows" :key="row.recordId" class="mobile-card">
+                <div class="mobile-card-header">
+                  <div>
+                    <div class="project-title">{{ row.projectLabel }}</div>
+                    <div class="project-stage">{{ row.stageLabel }}</div>
+                  </div>
+                  <el-tag :type="getStatusTag(row.status)" effect="dark">
+                    {{ row.status || '未完成' }}
+                  </el-tag>
+                </div>
+                <div class="mobile-card-body">
+                  <div class="mobile-info">
+                    <span class="label">计划时间</span>
+                    <span class="value">{{ formatRange(row.planStart, row.planEnd) }}</span>
+                  </div>
+                  <div class="mobile-info">
+                    <span class="label">实际完成</span>
+                    <span class="value">{{ row.actualFinish || '--' }}</span>
+                  </div>
+                  <div v-if="row.executorName" class="mobile-info">
+                    <span class="label">负责人</span>
+                    <span class="value">{{ row.executorName }}</span>
+                  </div>
+                </div>
+                <div class="mobile-card-actions">
+                  <el-button size="small" @click="openDetailDialog(row)">详情</el-button>
+                  <el-button size="small" type="primary" @click="openSubmitDialog(row)">提交</el-button>
+                </div>
               </div>
-              <div class="mobile-info">
-                <span class="label">实际完成</span>
-                <span class="value">{{ row.actualFinish || '--' }}</span>
-              </div>
-              <div v-if="row.executorName" class="mobile-info">
-                <span class="label">负责人</span>
-                <span class="value">{{ row.executorName }}</span>
-              </div>
-            </div>
-            <div class="mobile-card-actions">
-              <el-button size="small" @click="openDetailDialog(row)">详情</el-button>
-              <el-button size="small" type="primary" @click="openSubmitDialog(row)">提交</el-button>
             </div>
           </div>
         </div>
       </div>
+      <div v-if="totalCount > 0" class="pagination-row">
+        <el-config-provider :locale="zhCn">
+          <el-pagination
+            v-model:current-page="currentPage"
+            v-model:page-size="pageSize"
+            :page-sizes="[10, 20, 50, 100]"
+            layout="total, sizes, prev, pager, next, jumper"
+            :total="totalCount"
+            @size-change="handlePageSizeChange"
+            @current-change="handlePageChange"
+          />
+        </el-config-provider>
+      </div>
     </div>
 
-    <el-dialog v-model="detailDialogVisible" title="执行详情" width="680px">
+    <el-dialog
+      v-model="detailDialogVisible"
+      title="执行详情"
+      :width="dialogWidth"
+      :fullscreen="isMobile"
+      :class="{ 'mobile-dialog': isMobile }"
+    >
       <div v-if="detailRow" class="detail-body">
-        <el-descriptions :column="2" border>
+        <el-descriptions :column="isMobile ? 1 : 2" border>
           <el-descriptions-item label="项目">{{ detailRow.projectLabel }}</el-descriptions-item>
           <el-descriptions-item label="执行阶段">{{ detailRow.stageLabel }}</el-descriptions-item>
           <el-descriptions-item label="计划开始">{{ detailRow.planStart || '--' }}</el-descriptions-item>
@@ -138,10 +185,10 @@
           <el-descriptions-item label="当前状态">{{ detailRow.status || '未完成' }}</el-descriptions-item>
           <el-descriptions-item label="负责人">{{ detailRow.executorName || '--' }}</el-descriptions-item>
           <el-descriptions-item label="预警等级">{{ detailRow.warningLevel || '正常' }}</el-descriptions-item>
-          <el-descriptions-item label="执行说明" :span="2">
+          <el-descriptions-item label="执行说明" :span="isMobile ? 1 : 2">
             {{ detailRow.executionNote || '--' }}
           </el-descriptions-item>
-          <el-descriptions-item v-if="detailRow.overdueReason" label="超期原因" :span="2">
+          <el-descriptions-item v-if="detailRow.overdueReason" label="超期原因" :span="isMobile ? 1 : 2">
             {{ detailRow.overdueReason }}
           </el-descriptions-item>
         </el-descriptions>
@@ -166,8 +213,14 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="submitDialogVisible" title="执行提交" width="640px">
-      <el-form label-width="110px">
+    <el-dialog
+      v-model="submitDialogVisible"
+      title="执行提交"
+      :width="dialogWidth"
+      :fullscreen="isMobile"
+      :class="{ 'mobile-dialog': isMobile }"
+    >
+      <el-form :label-width="isMobile ? '90px' : '110px'">
         <el-form-item label="实际完成时间">
           <el-date-picker
             v-model="submitForm.actualFinish"
@@ -222,9 +275,10 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue';
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue';
 import { ElMessage } from 'element-plus';
-import { UploadFilled } from '@element-plus/icons-vue';
+import { UploadFilled, Bell, Flag, WarningFilled, TrendCharts } from '@element-plus/icons-vue';
+import zhCn from 'element-plus/es/locale/lang/zh-cn';
 import api from '../api/client';
 
 const searchQuery = ref('');
@@ -242,6 +296,7 @@ const submitDialogVisible = ref(false);
 const detailRow = ref(null);
 const submitRow = ref(null);
 const submitting = ref(false);
+const isMobile = ref(false);
 
 const submitForm = ref({
   actualFinish: '',
@@ -471,6 +526,23 @@ const matchesSearch = (row, query) => {
   return pool.some((item) => item.includes(query));
 };
 
+const matchesUser = (row) => {
+  const executorNameTokens = collectExecutorNameTokens(row.executorRaw);
+  const hasNameMatch =
+    userNameTokenSet.value.size > 0 &&
+    Array.from(userNameTokenSet.value).some((token) => executorNameTokens.has(token));
+
+  if (hasNameMatch) return true;
+
+  const executorIds = getExecutorIds(row.executorRaw).map((item) => normalizeToken(item));
+  const executorTokens = collectExecutorTokens(row.executorRaw);
+  const hasExecutorIdMatch = executorIds.some((id) => userTokenSet.value.has(id));
+  const hasExecutorTokenMatch = Array.from(userTokenSet.value).some((token) =>
+    executorTokens.has(token)
+  );
+  return hasExecutorIdMatch || hasExecutorTokenMatch;
+};
+
 const compareOrderValue = (a, b) => {
   if (a === null || a === undefined) return b === null || b === undefined ? 0 : 1;
   if (b === null || b === undefined) return -1;
@@ -479,29 +551,23 @@ const compareOrderValue = (a, b) => {
 };
 
 const hiddenStatuses = new Set(['完成', '超期完成']);
+const currentPage = ref(1);
+const pageSize = ref(10);
+const searchQueryLower = computed(() => searchQuery.value.trim().toLowerCase());
+
+const userMatchedRecords = computed(() => {
+  if (!hasUserId.value) return [];
+  return normalizedRecords.value.filter(matchesUser);
+});
+
+const searchedUserRecords = computed(() => {
+  const query = searchQueryLower.value;
+  if (!query) return userMatchedRecords.value;
+  return userMatchedRecords.value.filter((row) => matchesSearch(row, query));
+});
 
 const filteredRecords = computed(() => {
-  if (!hasUserId.value) return [];
-  const query = searchQuery.value.trim().toLowerCase();
-  return normalizedRecords.value.filter((row) => {
-    const executorNameTokens = collectExecutorNameTokens(row.executorRaw);
-    const hasNameMatch =
-      userNameTokenSet.value.size > 0 &&
-      Array.from(userNameTokenSet.value).some((token) => executorNameTokens.has(token));
-
-    if (!hasNameMatch) {
-      const executorIds = getExecutorIds(row.executorRaw).map((item) => normalizeToken(item));
-      const executorTokens = collectExecutorTokens(row.executorRaw);
-      const hasExecutorIdMatch = executorIds.some((id) => userTokenSet.value.has(id));
-      const hasExecutorTokenMatch = Array.from(userTokenSet.value).some((token) =>
-        executorTokens.has(token)
-      );
-      if (!hasExecutorIdMatch && !hasExecutorTokenMatch) return false;
-    }
-    if (hiddenStatuses.has(row.status)) return false;
-    if (!query) return true;
-    return matchesSearch(row, query);
-  });
+  return searchedUserRecords.value.filter((row) => !hiddenStatuses.has(row.status));
 });
 
 const tableRows = computed(() => {
@@ -518,18 +584,33 @@ const tableRows = computed(() => {
 
 const isDone = (status) => status === '完成' || status === '超期完成';
 
-const isOverdueRow = (row) => {
-  if (!row) return false;
-  if (row.status === '超期') return true;
-  if (isDone(row.status)) return false;
-  if (!row.planEndRaw) return false;
-  return row.planEndRaw.getTime() < Date.now();
-};
+const isOverdueRow = (row) => row?.status === '超期';
 
 const totalCount = computed(() => tableRows.value.length);
 const doneCount = computed(() => tableRows.value.filter((row) => isDone(row.status)).length);
 const overdueCount = computed(() => tableRows.value.filter((row) => isOverdueRow(row)).length);
 const pendingCount = computed(() => Math.max(totalCount.value - doneCount.value, 0));
+const waitingCount = computed(() => tableRows.value.filter((row) => row.status !== '超期').length);
+const overallCount = computed(() => searchedUserRecords.value.length);
+
+const mobileGroups = computed(() => {
+  const map = new Map();
+  tableRows.value.forEach((row) => {
+    const key = row.projectLabel || '未命名项目';
+    if (!map.has(key)) {
+      map.set(key, { key, title: key, rows: [] });
+    }
+    map.get(key).rows.push(row);
+  });
+  return Array.from(map.values());
+});
+
+const dialogWidth = computed(() => (isMobile.value ? '96%' : '680px'));
+
+const pagedRows = computed(() => {
+  const start = (currentPage.value - 1) * pageSize.value;
+  return tableRows.value.slice(start, start + pageSize.value);
+});
 
 const getStatusTag = (status) => {
   if (status === '完成' || status === '超期完成') return 'success';
@@ -567,6 +648,15 @@ const loadProgressRecords = async () => {
 
 const handleSearch = async () => {
   await loadProgressRecords();
+};
+
+const handlePageChange = (page) => {
+  currentPage.value = page;
+};
+
+const handlePageSizeChange = (size) => {
+  pageSize.value = size;
+  currentPage.value = 1;
 };
 
 const openDetailDialog = (row) => {
@@ -624,39 +714,19 @@ const normalizeAttachmentList = (value) => {
 
 const detailAttachments = computed(() => normalizeAttachmentList(detailRow.value?.siteUploadRaw));
 
-const readFileAsDataUrl = (file) =>
-  new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result || '');
-    reader.onerror = () => reject(new Error('读取文件失败'));
-    reader.readAsDataURL(file);
-  });
-
-const buildUploadPayload = async (fileList) => {
-  const tasks = fileList.map(async (item) => {
+const buildUploadFormData = (fileList) => {
+  const formData = new FormData();
+  fileList.forEach((item) => {
     const rawFile = item.raw || item;
-    const dataUrl = await readFileAsDataUrl(rawFile);
-    const base64 = String(dataUrl).includes(',') ? String(dataUrl).split(',')[1] : String(dataUrl);
-    return {
-      file_name: rawFile.name,
-      file_type: rawFile.type,
-      file_size: rawFile.size,
-      file_base64: base64,
-      file_data: base64,
-      name: rawFile.name,
-      type: rawFile.type,
-      size: rawFile.size,
-      data: base64,
-      data_url: dataUrl
-    };
+    formData.append('files', rawFile, rawFile.name);
   });
-  return Promise.all(tasks);
+  return formData;
 };
 
 const uploadFiles = async () => {
   if (!uploadFileList.value.length) return [];
-  const payload = await buildUploadPayload(uploadFileList.value);
-  const result = await api.uploadProjectProgressFiles(payload);
+  const formData = buildUploadFormData(uploadFileList.value);
+  const result = await api.uploadProjectProgressFiles(formData);
   if (result?.code === 200 && Array.isArray(result.data)) {
     return result.data;
   }
@@ -736,6 +806,21 @@ watch(submitDialogVisible, (visible) => {
   }
 });
 
+const handleResize = () => {
+  isMobile.value = window.innerWidth <= 768;
+};
+
+watch(
+  [tableRows, pageSize],
+  () => {
+    const maxPage = Math.max(1, Math.ceil(totalCount.value / pageSize.value));
+    if (currentPage.value > maxPage) {
+      currentPage.value = maxPage;
+    }
+  },
+  { immediate: true }
+);
+
 const resolveUserProfile = async () => {
   if (!userParam.value) return;
   try {
@@ -775,6 +860,8 @@ const resolveUserProfile = async () => {
 };
 
 onMounted(async () => {
+  handleResize();
+  window.addEventListener('resize', handleResize);
   userParam.value = getQueryParam('webpage_user_id') || '';
   if (!userParam.value) {
     ElMessage.warning('未获取到用户ID，已隐藏执行数据');
@@ -790,6 +877,10 @@ onMounted(async () => {
   // 1. 获取 ID
   const userId = getQueryParam('webpage_user_id');
   console.log('Webpage User ID:', userId);
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', handleResize);
 });
 
 </script>
@@ -838,6 +929,44 @@ onMounted(async () => {
   border-radius: 10px;
   padding: 16px;
   box-shadow: 0 6px 20px rgba(15, 23, 42, 0.04);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.summary-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+}
+
+.summary-icon.is-primary {
+  background: rgba(22, 119, 255, 0.12);
+  color: #1677ff;
+}
+
+.summary-icon.is-warning {
+  background: rgba(250, 140, 22, 0.14);
+  color: #fa8c16;
+}
+
+.summary-icon.is-danger {
+  background: rgba(245, 34, 45, 0.12);
+  color: #f5222d;
+}
+
+.summary-icon.is-neutral {
+  background: rgba(24, 144, 255, 0.08);
+  color: #3a7afe;
+}
+
+.summary-content {
+  display: flex;
+  flex-direction: column;
 }
 
 .summary-label {
@@ -862,6 +991,10 @@ onMounted(async () => {
 
 .accent-danger {
   color: #f5222d;
+}
+
+.accent-warning {
+  color: #fa8c16;
 }
 
 .table-card {
@@ -889,6 +1022,36 @@ onMounted(async () => {
 
 .mobile-only {
   display: none;
+}
+
+.mobile-group-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.mobile-group {
+  background: rgba(255, 255, 255, 0.7);
+  border-radius: 14px;
+  padding: 12px;
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.06);
+}
+
+.mobile-group-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.mobile-group-title {
+  font-weight: 600;
+  color: #303133;
+}
+
+.mobile-group-count {
+  font-size: 12px;
+  color: #909399;
 }
 
 .mobile-card-list {
@@ -930,9 +1093,9 @@ onMounted(async () => {
 }
 
 .mobile-card-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
 }
 
 .detail-body {
@@ -979,6 +1142,20 @@ onMounted(async () => {
   padding: 20px 0;
 }
 
+.pagination-row {
+  margin-top: 16px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.mobile-dialog :deep(.el-dialog__body) {
+  padding: 16px;
+}
+
+.mobile-dialog :deep(.el-dialog__footer) {
+  padding: 12px 16px 16px;
+}
+
 @media (max-width: 1200px) {
   .summary-grid {
     grid-template-columns: repeat(2, 1fr);
@@ -995,7 +1172,7 @@ onMounted(async () => {
   }
 
   .summary-grid {
-    grid-template-columns: 1fr;
+    display: none;
   }
 
   .table-card {
@@ -1004,6 +1181,10 @@ onMounted(async () => {
 
   .mobile-only {
     display: block;
+  }
+
+  .pagination-row {
+    display: none;
   }
 }
 </style>

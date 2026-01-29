@@ -2,7 +2,10 @@
 Project progress API routes.
 """
 import logging
-from flask import Blueprint, request, jsonify
+import os
+import uuid
+from werkzeug.utils import secure_filename
+from flask import Blueprint, request, jsonify, current_app
 from api.online_office import api_client
 from field_mapping import PROJECT_PROGRESS_FIELDS_EN
 
@@ -185,20 +188,51 @@ def delete_project_progress(data_id):
 def upload_project_progress_files():
     """Upload file metadata for progress attachments."""
     try:
+        if request.files:
+            files = request.files.getlist('files') or list(request.files.values())
+            if not files:
+                return jsonify({
+                    'code': 400,
+                    'msg': 'Please upload files'
+                }), 400
+            upload_dir = current_app.config.get('UPLOAD_DIR') or os.path.join(os.getcwd(), 'uploads')
+            os.makedirs(upload_dir, exist_ok=True)
+            public_base = current_app.config.get('PUBLIC_BASE_URL') or request.host_url.rstrip('/')
+            payload = []
+            for file in files:
+                if not file or not file.filename:
+                    continue
+                filename = secure_filename(file.filename)
+                unique_name = f"{uuid.uuid4().hex}_{filename}"
+                file_path = os.path.join(upload_dir, unique_name)
+                file.save(file_path)
+                file_url = f"{public_base}/uploads/{unique_name}"
+                payload.append({'name': filename, 'url': file_url})
+            if not payload:
+                return jsonify({
+                    'code': 400,
+                    'msg': 'No valid files'
+                }), 400
+            result = api_client.upload_project_progress_files(payload)
+            return jsonify({
+                'code': 200,
+                'msg': 'success',
+                'data': result
+            })
         files = request.get_json()
         if not isinstance(files, list):
             return jsonify({
                 'code': 400,
-                'msg': '请提供文件列表'
+                'msg': 'Please provide file URL list'
             }), 400
         result = api_client.upload_project_progress_files(files)
         return jsonify({
             'code': 200,
-            'msg': '成功',
+            'msg': 'success',
             'data': result
         })
     except Exception as e:
-        logger.error(f"上传文件失败: {e}")
+        logger.error(f"Upload failed: {e}")
         return jsonify({
             'code': 500,
             'msg': str(e)

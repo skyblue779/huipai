@@ -1,10 +1,10 @@
 """
 主应用入口
 """
-from flask import Flask, jsonify
+from flask import Flask, jsonify, send_from_directory
 from flask_cors import CORS
 import logging
-from config import DEBUG, CORS_ORIGINS, SECRET_KEY
+from config import DEBUG, CORS_ORIGINS, SECRET_KEY, UPLOAD_DIR, PUBLIC_BASE_URL
 from api.stage_config import stage_bp
 from api.project import project_bp
 from api.project_type import project_type_bp
@@ -23,6 +23,8 @@ def create_app():
     # 加载配置
     app.config['SECRET_KEY'] = SECRET_KEY
     app.config['DEBUG'] = DEBUG
+    app.config['UPLOAD_DIR'] = UPLOAD_DIR
+    app.config['PUBLIC_BASE_URL'] = PUBLIC_BASE_URL
     
     # 启用CORS（开发模式下允许所有来源，避免前端跨域阻塞）
     # 生产环境请根据 CORS_ORIGINS 进行严格配置
@@ -43,6 +45,10 @@ def create_app():
     app.register_blueprint(user_bp)
     
     # 健康检查端点
+    @app.route('/uploads/<path:filename>', methods=['GET'])
+    def uploaded_file(filename):
+        return send_from_directory(app.config['UPLOAD_DIR'], filename)
+
     @app.route('/health', methods=['GET'])
     def health():
         return jsonify({
