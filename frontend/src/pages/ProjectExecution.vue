@@ -156,8 +156,8 @@
       <div v-if="totalCount > 0" class="pagination-row">
         <el-config-provider :locale="zhCn">
           <el-pagination
-            v-model:current-page="currentPage"
-            v-model:page-size="pageSize"
+            :current-page="currentPage"
+            :page-size="pageSize"
             :page-sizes="[10, 20, 50, 100]"
             layout="total, sizes, prev, pager, next, jumper"
             :total="totalCount"
@@ -220,9 +220,9 @@
       :fullscreen="isMobile"
       :class="{ 'mobile-dialog': isMobile }"
     >
-      <el-form :label-width="isMobile ? '90px' : '110px'">
-        <el-form-item label="实际完成时间">
-          <el-date-picker
+        <el-form :label-width="isMobile ? '90px' : '110px'">
+          <el-form-item label="实际完成时间">
+            <el-date-picker
             v-model="submitForm.actualFinish"
             type="date"
             value-format="YYYY-MM-DD"
@@ -232,13 +232,14 @@
         </el-form-item>
         <el-form-item label="现场资料上传">
           <el-upload
-            v-model:file-list="uploadFileList"
+            :file-list="uploadFileList"
             action="#"
             multiple
             drag
             :auto-upload="false"
             :limit="5"
             :on-exceed="handleUploadExceed"
+            @update:file-list="handleUploadFileListChange"
           >
             <el-icon class="upload-icon"><UploadFilled /></el-icon>
             <div class="el-upload__text">
@@ -797,6 +798,10 @@ const handleSubmit = async () => {
 
 const handleUploadExceed = () => {
   ElMessage.warning('最多上传 5 个文件');
+};
+
+const handleUploadFileListChange = (fileList) => {
+  uploadFileList.value = fileList;
 };
 
 watch(submitDialogVisible, (visible) => {
