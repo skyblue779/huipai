@@ -66,6 +66,14 @@ const listProjectTypes = ({ skip = 0, limit = 300 } = {}) => {
   return request('GET', `/api/project-type/list?${params.toString()}`);
 };
 
+const listCostTypes = ({ skip = 0, limit = 300 } = {}) => {
+  const params = new URLSearchParams({
+    skip: String(skip),
+    limit: String(limit)
+  });
+  return request('GET', `/api/cost-type/list?${params.toString()}`);
+};
+
 const listStages = ({ skip = 0, limit = 300, projectType = '' } = {}) => {
   const params = new URLSearchParams({
     skip: String(skip),
@@ -77,9 +85,24 @@ const listStages = ({ skip = 0, limit = 300, projectType = '' } = {}) => {
   return request('GET', `/api/stage/list?${params.toString()}`);
 };
 
+const listCostStages = ({ skip = 0, limit = 300, projectType = '' } = {}) => {
+  const params = new URLSearchParams({
+    skip: String(skip),
+    limit: String(limit)
+  });
+  if (projectType) {
+    params.set('project_type', projectType);
+  }
+  return request('GET', `/api/cost-stage/list?${params.toString()}`);
+};
+
 const createStage = (data) => request('POST', '/api/stage/create', data);
 const updateStage = (dataId, data) => request('PUT', `/api/stage/update/${dataId}`, data);
 const deleteStage = (dataId) => request('DELETE', `/api/stage/delete/${dataId}`);
+
+const createCostStage = (data) => request('POST', '/api/cost-stage/create', data);
+const updateCostStage = (dataId, data) => request('PUT', `/api/cost-stage/update/${dataId}`, data);
+const deleteCostStage = (dataId) => request('DELETE', `/api/cost-stage/delete/${dataId}`);
 
 const listProjectProgress = ({ skip = 0, limit = 300, search = '', projectCode = '', projectName = '' } = {}) => {
   const params = new URLSearchParams({
@@ -113,10 +136,15 @@ const getUserInfo = (userId) => request('GET', `/api/user/info/${userId}`);
 
 export default {
   listProjectTypes,
+  listCostTypes,
   listStages,
+  listCostStages,
   createStage,
   updateStage,
   deleteStage,
+  createCostStage,
+  updateCostStage,
+  deleteCostStage,
   listProjectProgress,
   createProjectProgress,
   updateProjectProgress,

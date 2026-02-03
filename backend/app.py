@@ -8,6 +8,8 @@ from config import DEBUG, CORS_ORIGINS, SECRET_KEY, UPLOAD_DIR, PUBLIC_BASE_URL
 from api.stage_config import stage_bp
 from api.project import project_bp
 from api.project_type import project_type_bp
+from api.cost_stage_config import cost_stage_bp
+from api.cost_type import cost_type_bp
 from api.project_progress import progress_bp
 from api.user import user_bp
 
@@ -41,6 +43,8 @@ def create_app():
     app.register_blueprint(stage_bp)
     app.register_blueprint(project_bp)
     app.register_blueprint(project_type_bp)
+    app.register_blueprint(cost_stage_bp)
+    app.register_blueprint(cost_type_bp)
     app.register_blueprint(progress_bp)
     app.register_blueprint(user_bp)
     

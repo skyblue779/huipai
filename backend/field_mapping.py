@@ -23,12 +23,29 @@ STAGE_CONFIG_FIELDS_EN = {
     'project_type': '_widget_1769152663361',
 }
 
+# 椤圭洰鎴愭湰闃舵閰嶇疆琛ㄧ殑鑻辨枃瀛楁鏄犲皠 (entry: 2ae1401fbd78bcccaba24a6b)
+COST_STAGE_FIELDS_EN = {
+    'id': '_widget_1769130163477',
+    'name': '_widget_1769130163517',
+    'parent_id': '_widget_1769130163557',
+    'sort_order': '_widget_1769130163598',
+    'description': '_widget_1769150079419',
+    'project_type': '_widget_1769152663361',
+}
+
 # 项目类型表字段映射 (entry: 6e32422ead05c1ce9790f812)
 PROJECT_TYPE_FIELDS_EN = {
     'id': '_widget_1769152903399',       # sn
     'name': '_widget_1769152903413',     # text
 }
 PROJECT_TYPE_REVERSE_EN = {v: k for k, v in PROJECT_TYPE_FIELDS_EN.items()}
+
+# 椤圭洰鎴愭湰绫诲瀷琛ㄥ瓧娈垫槧灏? (entry: 30e046f98508908b9ae064ae)
+COST_TYPE_FIELDS_EN = {
+    'id': '_widget_1769152903399',       # sn
+    'name': '_widget_1769152903413',     # text
+}
+COST_TYPE_REVERSE_EN = {v: k for k, v in COST_TYPE_FIELDS_EN.items()}
 
 # 项目表的字段映射 (entry: e8894672999be041d2d1c4f1)
 PROJECT_FIELDS = {
@@ -54,6 +71,7 @@ PROJECT_FIELDS = {
 # 反向映射：从字段别名到中文名称
 STAGE_CONFIG_REVERSE = {v: k for k, v in STAGE_CONFIG_FIELDS.items()}
 STAGE_CONFIG_REVERSE_EN = {v: k for k, v in STAGE_CONFIG_FIELDS_EN.items()}
+COST_STAGE_REVERSE_EN = {v: k for k, v in COST_STAGE_FIELDS_EN.items()}
 PROJECT_PROGRESS_FIELDS_EN = {
     'project_code': '_widget_1769239633492',
     'project_name': '_widget_1769239633511',

@@ -9,8 +9,10 @@ from config import (
     APP_ID,
     API_KEY,
     STAGE_CONFIG_ENTRY_ID,
+    COST_STAGE_ENTRY_ID,
     PROJECT_ENTRY_ID,
     PROJECT_TYPE_ENTRY_ID,
+    COST_TYPE_ENTRY_ID,
     PROJECT_PROGRESS_ENTRY_ID,
     REQUEST_TIMEOUT
 )
@@ -19,7 +21,10 @@ from field_mapping import (
     PROJECT_FIELDS,
     STAGE_CONFIG_FIELDS_EN,
     STAGE_CONFIG_REVERSE_EN,
+    COST_STAGE_FIELDS_EN,
+    COST_STAGE_REVERSE_EN,
     PROJECT_TYPE_REVERSE_EN,
+    COST_TYPE_REVERSE_EN,
     PROJECT_PROGRESS_FIELDS_EN,
     PROJECT_PROGRESS_REVERSE_EN,
 )
@@ -113,6 +118,20 @@ class OnlineOfficeAPI:
 
         result = self._request('POST', url, json=payload)
         return [FieldMapper.map_from_alias(item, PROJECT_TYPE_REVERSE_EN) for item in result.get('data', [])]
+
+    def list_cost_types(self, skip: int = 0, limit: int = 300, filter_obj: Optional[Dict] = None) -> List[Dict]:
+        """List cost types."""
+        url = self._build_url(COST_TYPE_ENTRY_ID, 'data')
+
+        payload = {
+            'skip': skip,
+            'limit': limit
+        }
+        if filter_obj:
+            payload['filter'] = filter_obj
+
+        result = self._request('POST', url, json=payload)
+        return [FieldMapper.map_from_alias(item, COST_TYPE_REVERSE_EN) for item in result.get('data', [])]
     
     def update_stage(self, data_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
         """更新阶段节点"""
@@ -137,6 +156,56 @@ class OnlineOfficeAPI:
         })
         return True
     
+    
+
+    # ==================== Cost stage operations ====================
+
+    def create_cost_stage(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Create cost stage."""
+        mapped_data = FieldMapper.map_to_alias(data, COST_STAGE_FIELDS_EN)
+        url = self._build_url(COST_STAGE_ENTRY_ID, 'data_create')
+        result = self._request('POST', url, json={'data': mapped_data})
+        return FieldMapper.map_from_alias(result.get('data', {}), COST_STAGE_REVERSE_EN)
+
+    def get_cost_stage(self, data_id: str) -> Dict[str, Any]:
+        """Get cost stage."""
+        url = self._build_url(COST_STAGE_ENTRY_ID, 'data_retrieve')
+        result = self._request('POST', url, json={'data_id': data_id})
+        data = result.get('data', {})
+        return FieldMapper.map_from_alias(data, COST_STAGE_REVERSE_EN)
+
+    def list_cost_stages(self, skip: int = 0, limit: int = 300, filter_obj: Optional[Dict] = None) -> List[Dict]:
+        """List cost stages."""
+        url = self._build_url(COST_STAGE_ENTRY_ID, 'data')
+        payload = {
+            'skip': skip,
+            'limit': limit
+        }
+        if filter_obj:
+            payload['filter'] = filter_obj
+        result = self._request('POST', url, json=payload)
+        return [FieldMapper.map_from_alias(item, COST_STAGE_REVERSE_EN) for item in result.get('data', [])]
+
+    def update_cost_stage(self, data_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Update cost stage."""
+        supported_fields = {k: v for k, v in COST_STAGE_FIELDS_EN.items() if k in data}
+        mapped_data = FieldMapper.map_to_alias(data, supported_fields)
+        url = self._build_url(COST_STAGE_ENTRY_ID, 'data_update')
+        result = self._request('POST', url, json={
+            'data_id': data_id,
+            'data': mapped_data
+        })
+        return FieldMapper.map_from_alias(result.get('data', {}), COST_STAGE_REVERSE_EN)
+
+    def delete_cost_stage(self, data_id: str) -> bool:
+        """Delete cost stage."""
+        url = self._build_url(COST_STAGE_ENTRY_ID, 'data_delete')
+        self._request('POST', url, json={
+            'data_id': data_id,
+            'is_start_event': False,
+            'operator': ''
+        })
+        return True
     # ==================== 项目表操作 ====================
     
     def create_project(self, data: Dict[str, Any]) -> Dict[str, Any]:
