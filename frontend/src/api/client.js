@@ -121,6 +121,23 @@ const listProjectProgress = ({ skip = 0, limit = 300, search = '', projectCode =
   return request('GET', `/api/progress/list?${params.toString()}`);
 };
 
+const listProjectSummary = ({ skip = 0, limit = 300, search = '', projectCode = '', projectName = '' } = {}) => {
+  const params = new URLSearchParams({
+    skip: String(skip),
+    limit: String(limit)
+  });
+  if (search) {
+    params.set('search', search);
+  }
+  if (projectCode) {
+    params.set('project_code', projectCode);
+  }
+  if (projectName) {
+    params.set('project_name', projectName);
+  }
+  return request('GET', `/api/project/list-summary?${params.toString()}`);
+};
+
 const createProjectProgress = (data) => request('POST', '/api/progress/create', data);
 const updateProjectProgress = (dataId, data) => request('PUT', `/api/progress/update/${dataId}`, data);
 const deleteProjectProgress = (dataId) => request('DELETE', `/api/progress/delete/${dataId}`);
@@ -185,6 +202,7 @@ export default {
   updateCostStage,
   deleteCostStage,
   listProjectProgress,
+  listProjectSummary,
   createProjectProgress,
   updateProjectProgress,
   deleteProjectProgress,

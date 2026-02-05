@@ -4,6 +4,7 @@
 import logging
 from flask import Blueprint, request, jsonify
 from api.online_office import api_client
+from field_mapping import PROJECT_FIELDS_EN
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +48,85 @@ def list_projects():
         })
     except Exception as e:
         logger.error(f"获取项目列表失败: {e}")
+        return jsonify({
+            'code': 500,
+            'msg': str(e)
+        }), 500
+
+
+@project_bp.route('/list-summary', methods=['GET'])
+def list_project_summary():
+    """获取项目简要信息（英文字段）"""
+    try:
+        skip = request.args.get('skip', 0, type=int)
+        limit = request.args.get('limit', 300, type=int)
+        search = request.args.get('search', '', type=str)
+        project_code = request.args.get('project_code', '', type=str)
+        project_name = request.args.get('project_name', '', type=str)
+
+        filter_obj = None
+        cond = []
+
+        if project_code:
+            cond.append({
+                'field': PROJECT_FIELDS_EN['project_code'],
+                'method': 'like',
+                'value': [project_code]
+            })
+
+        if project_name:
+            cond.append({
+                'field': PROJECT_FIELDS_EN['project_name'],
+                'method': 'like',
+                'value': [project_name]
+            })
+
+        if search:
+            filter_obj = {
+                'rel': 'or',
+                'cond': [
+                    {
+                        'field': PROJECT_FIELDS_EN['project_name'],
+                        'method': 'like',
+                        'value': [search]
+                    },
+                    {
+                        'field': PROJECT_FIELDS_EN['project_code'],
+                        'method': 'like',
+                        'value': [search]
+                    }
+                ]
+            }
+        elif cond:
+            filter_obj = {
+                'rel': 'and',
+                'cond': cond
+            }
+
+        fields = [
+            'project_code',
+            'project_name',
+            'project_type',
+            'project_cost_type',
+            'project_status',
+            'plan_start',
+            'plan_finish',
+            'project_manager'
+        ]
+        projects = api_client.list_projects_en(
+            skip=skip,
+            limit=limit,
+            filter_obj=filter_obj,
+            fields=fields
+        )
+        return jsonify({
+            'code': 200,
+            'msg': '成功',
+            'data': projects,
+            'total': len(projects)
+        })
+    except Exception as e:
+        logger.error(f"获取项目简要信息失败: {e}")
         return jsonify({
             'code': 500,
             'msg': str(e)

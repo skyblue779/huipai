@@ -55,6 +55,7 @@ PROJECT_FIELDS = {
     '合同名称': '_widget_1769064437829',
     '项目类型': '_widget_1769064636768',
     '建设地点': '_widget_1769064637832',
+    '项目成本类型': '_widget_1770203938133',
     '项目状态': '_widget_1769064637023',
     '计划开工': '_widget_1769064637850',
     '计划完工': '_widget_1769064637874',
@@ -94,6 +95,23 @@ PROJECT_PROGRESS_FIELDS_EN = {
 PROJECT_PROGRESS_REVERSE_EN = {v: k for k, v in PROJECT_PROGRESS_FIELDS_EN.items()}
 
 PROJECT_REVERSE = {v: k for k, v in PROJECT_FIELDS.items()}
+
+# 项目表英文字段映射（前端使用）
+PROJECT_FIELDS_EN = {
+    'project_code': '_widget_1769064437789',
+    'project_name': '_widget_1769064437770',
+    'contract_name': '_widget_1769064437829',
+    'project_type': '_widget_1769064636768',
+    'location': '_widget_1769064637832',
+    'project_cost_type': '_widget_1770203938133',
+    'project_status': '_widget_1769064637023',
+    'plan_start': '_widget_1769064637850',
+    'plan_finish': '_widget_1769064637874',
+    'project_manager': '_widget_1769064637963',
+    'owner_department': '_widget_1769066077660',
+    'participants': '_widget_1769066077800',
+}
+PROJECT_REVERSE_EN = {v: k for k, v in PROJECT_FIELDS_EN.items()}
 
 # 项目预算管理表字段映射 (entry: 7235499ba8fd3f91362c04ce)
 PROJECT_BUDGET_FIELDS_EN = {

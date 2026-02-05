@@ -20,12 +20,14 @@ from config import (
 from field_mapping import (
     FieldMapper,
     PROJECT_FIELDS,
+    PROJECT_FIELDS_EN,
     STAGE_CONFIG_FIELDS_EN,
     STAGE_CONFIG_REVERSE_EN,
     COST_STAGE_FIELDS_EN,
     COST_STAGE_REVERSE_EN,
     PROJECT_TYPE_REVERSE_EN,
     COST_TYPE_REVERSE_EN,
+    PROJECT_REVERSE_EN,
     PROJECT_PROGRESS_FIELDS_EN,
     PROJECT_PROGRESS_REVERSE_EN,
     PROJECT_BUDGET_FIELDS_EN,
@@ -244,6 +246,28 @@ class OnlineOfficeAPI:
         
         reverse_map = {v: k for k, v in PROJECT_FIELDS.items()}
         return [FieldMapper.map_from_alias(item, reverse_map) for item in result.get('data', [])]
+
+    def list_projects_en(
+        self,
+        skip: int = 0,
+        limit: int = 300,
+        filter_obj: Optional[Dict] = None,
+        fields: Optional[List[str]] = None
+    ) -> List[Dict]:
+        """查询项目列表（英文字段）"""
+        url = self._build_url(PROJECT_ENTRY_ID, 'data')
+
+        payload = {
+            'skip': skip,
+            'limit': limit
+        }
+        if filter_obj:
+            payload['filter'] = filter_obj
+        if fields:
+            payload['fields'] = [PROJECT_FIELDS_EN.get(name, name) for name in fields]
+
+        result = self._request('POST', url, json=payload)
+        return [FieldMapper.map_from_alias(item, PROJECT_REVERSE_EN) for item in result.get('data', [])]
     
     def update_project(self, data_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
         """更新项目"""
