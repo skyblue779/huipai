@@ -260,6 +260,7 @@ const originalExecutorIds = ref([]);
 const members = ref([]);
 const memberLoading = ref(false);
 
+// 解析日期值为 Date
 const parseDateValue = (value) => {
   if (!value) return null;
   if (value instanceof Date) return value;
@@ -273,6 +274,7 @@ const parseDateValue = (value) => {
   return null;
 };
 
+// 解析日期区间
 const parseDateRange = (value) => {
   if (!value) return { start: null, end: null };
   if (Array.isArray(value)) {
@@ -301,6 +303,7 @@ const parseDateRange = (value) => {
   return { start: single, end: null };
 };
 
+// 格式化日期展示
 const formatDate = (value) => {
   if (!value) return '--';
   if (typeof value === 'string') {
@@ -315,11 +318,13 @@ const formatDate = (value) => {
   return `${year}-${month}-${day}`;
 };
 
+// 表格日期展示格式
 const formatDateCell = (value) => {
   if (!value) return '';
   return formatDate(value);
 };
 
+// 格式化执行人显示
 const formatUser = (value) => {
   if (!value) return '--';
   if (Array.isArray(value)) {
@@ -332,6 +337,7 @@ const formatUser = (value) => {
   return String(value);
 };
 
+// 提取执行人 ID 列表
 const getExecutorIds = (value) => {
   if (!value) return [];
   if (Array.isArray(value)) {
@@ -349,6 +355,7 @@ const getExecutorIds = (value) => {
   return [String(value)];
 };
 
+// 更新计划时间字段中的开始日期
 const updatePlanTimeValue = (rawValue, newStart, fallbackEnd) => {
   if (!newStart) return rawValue;
   const formatEnd = (value) => {
@@ -383,12 +390,14 @@ const updatePlanTimeValue = (rawValue, newStart, fallbackEnd) => {
   return newStart;
 };
 
+// 规范化 ID 列表用于比较
 const normalizeIdList = (ids) =>
   (Array.isArray(ids) ? ids : [])
     .map((id) => String(id).trim())
     .filter(Boolean)
     .sort();
 
+// 成员下拉选项
 const memberOptions = computed(() =>
   members.value.map((item) => ({
     id: item.user_id,
@@ -397,12 +406,14 @@ const memberOptions = computed(() =>
 );
 
 
+// 标准化文本展示
 const normalizeLabel = (value) => {
   if (value === null || value === undefined) return '';
   if (typeof value === 'string') return value.trim();
   return String(value);
 };
 
+// 规范化阶段序号为可比较类型
 const normalizeOrderValue = (value) => {
   if (value === null || value === undefined) return null;
   const trimmed = String(value).trim();
@@ -412,6 +423,7 @@ const normalizeOrderValue = (value) => {
   return trimmed;
 };
 
+// 比较阶段序号（数字优先）
 const compareOrderValue = (a, b) => {
   if (a === null || a === undefined) return b === null || b === undefined ? 0 : 1;
   if (b === null || b === undefined) return -1;
@@ -421,6 +433,7 @@ const compareOrderValue = (a, b) => {
   return String(a).localeCompare(String(b), 'zh');
 };
 
+// 按项目分组记录
 const groupedProjects = computed(() => {
   const map = new Map();
   progressRecords.value.forEach((item) => {
@@ -442,6 +455,7 @@ const groupedProjects = computed(() => {
   return Array.from(map.values());
 });
 
+// 分组变化时同步选中项目
 watch(
   groupedProjects,
   (groups) => {
@@ -457,6 +471,7 @@ watch(
 );
 
 
+// 当前选中的项目
 const currentProject = computed(() => {
   if (!groupedProjects.value.length) {
     return {
@@ -472,12 +487,14 @@ const currentProject = computed(() => {
   );
 });
 
+// 当前项目标题
 const currentProjectLabel = computed(() => {
   const name = currentProject.value.projectName || '暂无项目';
   const code = currentProject.value.projectCode;
   return code ? `${name} (${code})` : name;
 });
 
+// 项目下拉选项
 const projectOptions = computed(() =>
   groupedProjects.value.map((item) => {
     const name = item.projectName || '未命名项目';
@@ -489,6 +506,7 @@ const projectOptions = computed(() =>
   })
 );
 
+// 规范化节点数据用于展示
 const normalizeNode = (record, index) => {
   const planRange = parseDateRange(record.plan_time);
   const planStartDate = planRange.start || null;
@@ -522,6 +540,7 @@ const normalizeNode = (record, index) => {
   };
 };
 
+// 时间轴节点（按序号/时间排序）
 const timelineNodes = computed(() => {
   const nodes = currentProject.value.records.map((record, index) => normalizeNode(record, index));
   nodes.sort((a, b) => {
@@ -536,6 +555,7 @@ const timelineNodes = computed(() => {
   return nodes;
 });
 
+// 表格数据（按主阶段分组）
 const tableRows = computed(() => {
   const rows = [];
   const groupMap = new Map();
@@ -574,14 +594,17 @@ const tableRows = computed(() => {
   return rows;
 });
 
+// 判断节点是否已完成
 const isDone = (status) => status === '完成' || status === '超期完成';
 
+// 计算整体完成进度
 const overallProgress = computed(() => {
   const total = timelineNodes.value.length;
   const doneCount = timelineNodes.value.filter((node) => isDone(node.status)).length;
   return total === 0 ? 0 : Math.round((doneCount / total) * 100);
 });
 
+// 预警统计
 const totalWarningLevelCount = computed(
   () => timelineNodes.value.filter((node) => node.status === '超期').length
 );
@@ -589,24 +612,30 @@ const warningLevelCount = computed(
   () => timelineNodes.value.filter((node) => node.warningLevel && node.warningLevel !== '正常').length
 );
 
+// 里程碑统计
 const milestoneReachedCount = computed(() => timelineNodes.value.filter((node) => isDone(node.status)).length);
 const milestoneTotalCount = computed(() => timelineNodes.value.length);
 
+// 进度标签颜色
 const overallProgressType = computed(() => (warningLevelCount.value > 0 ? 'danger' : 'primary'));
 
+// 状态标签样式
 const getStatusTag = (status) => {
   if (status === '完成' || status === '超期完成') return 'success';
   if (status === '超期') return 'danger';
   return 'info';
 };
 
+// 兜底状态展示
 const displayStatus = (status) => {
   if (status === '????') return '??';
   return status || '???';
 };
 
+// 分组行样式
 const getRowClass = ({ row }) => (row.isGroup ? 'table-group-row' : '');
 
+// 预警等级标签样式
 const getWarningTag = (level) => {
   if (level === '三级预警') return 'danger';
   if (level === '二级预警') return 'warning';
@@ -614,6 +643,7 @@ const getWarningTag = (level) => {
   return 'success';
 };
 
+// 拉取进度数据
 const loadProgressRecords = async (search = '') => {
   loading.value = true;
   try {
@@ -637,10 +667,12 @@ const loadProgressRecords = async (search = '') => {
   }
 };
 
+// 搜索项目进度
 const handleSearch = async () => {
   await loadProgressRecords(searchQuery.value.trim());
 };
 
+// 拉取成员列表
 const loadMembers = async () => {
   if (memberLoading.value) return;
   memberLoading.value = true;
@@ -661,6 +693,7 @@ const loadMembers = async () => {
   }
 };
 
+// 打开编辑弹窗
 const openEditDialog = async (row) => {
   if (!row || row.isGroup) return;
   editRow.value = row;
@@ -688,6 +721,7 @@ const openEditDialog = async (row) => {
   }
 };
 
+// 保存节点编辑
 const handleSaveEdit = async () => {
   if (!editRow.value?.recordId) {
     ElMessage.error('无法编辑：缺少记录ID');
@@ -729,8 +763,10 @@ const handleSaveEdit = async () => {
   }
 };
 
+// 页面初始化
 onMounted(async () => {
   await loadProgressRecords();
+  // 读取 URL 参数（调试用）
   function getQueryParam(paramName) {
     const urlParams = new URLSearchParams(window.location.search);
     return urlParams.get(paramName);

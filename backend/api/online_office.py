@@ -14,6 +14,7 @@ from config import (
     PROJECT_TYPE_ENTRY_ID,
     COST_TYPE_ENTRY_ID,
     PROJECT_PROGRESS_ENTRY_ID,
+    PROJECT_BUDGET_ENTRY_ID,
     REQUEST_TIMEOUT
 )
 from field_mapping import (
@@ -27,6 +28,10 @@ from field_mapping import (
     COST_TYPE_REVERSE_EN,
     PROJECT_PROGRESS_FIELDS_EN,
     PROJECT_PROGRESS_REVERSE_EN,
+    PROJECT_BUDGET_FIELDS_EN,
+    PROJECT_BUDGET_DETAIL_FIELDS_EN,
+    PROJECT_BUDGET_REVERSE_EN,
+    PROJECT_BUDGET_DETAIL_REVERSE_EN,
 )
 
 logger = logging.getLogger(__name__)
@@ -315,6 +320,104 @@ class OnlineOfficeAPI:
 
     def upload_project_progress_files(self, files: List[Dict[str, str]]) -> List[Dict[str, Any]]:
         url = self._build_url(PROJECT_PROGRESS_ENTRY_ID, 'upload_file')
+        result = self._request('POST', url, json=files)
+        return result.get('data', [])
+
+    # ==================== Project budget operations ====================
+
+    @staticmethod
+    def _map_budget_details_to_alias(details: Any) -> List[Dict[str, Any]]:
+        if not isinstance(details, list):
+            return []
+        mapped = []
+        for item in details:
+            if not isinstance(item, dict):
+                continue
+            mapped.append(FieldMapper.map_to_alias(item, PROJECT_BUDGET_DETAIL_FIELDS_EN))
+        return mapped
+
+    @staticmethod
+    def _map_budget_details_from_alias(details: Any) -> Any:
+        if not isinstance(details, list):
+            return details
+        mapped = []
+        for item in details:
+            if not isinstance(item, dict):
+                continue
+            mapped.append(FieldMapper.map_from_alias(item, PROJECT_BUDGET_DETAIL_REVERSE_EN))
+        return mapped
+
+    def _map_project_budget_from_alias(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        mapped = FieldMapper.map_from_alias(data, PROJECT_BUDGET_REVERSE_EN)
+        details_key = PROJECT_BUDGET_REVERSE_EN.get(PROJECT_BUDGET_FIELDS_EN['cost_details'])
+        if details_key and details_key in mapped:
+            mapped[details_key] = self._map_budget_details_from_alias(mapped.get(details_key))
+        return mapped
+
+    def create_project_budget(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        payload = dict(data or {})
+        details = payload.pop('cost_details', None)
+        mapped_data = FieldMapper.map_to_alias(payload, PROJECT_BUDGET_FIELDS_EN)
+        if details is not None:
+            mapped_data[PROJECT_BUDGET_FIELDS_EN['cost_details']] = self._map_budget_details_to_alias(details)
+        url = self._build_url(PROJECT_BUDGET_ENTRY_ID, 'data_create')
+        result = self._request('POST', url, json={'data': mapped_data})
+        return self._map_project_budget_from_alias(result.get('data', {}))
+
+    def get_project_budget(self, data_id: str) -> Dict[str, Any]:
+        url = self._build_url(PROJECT_BUDGET_ENTRY_ID, 'data_retrieve')
+        result = self._request('POST', url, json={'data_id': data_id})
+        data = result.get('data', {})
+        return self._map_project_budget_from_alias(data)
+
+    def list_project_budgets(
+        self,
+        skip: int = 0,
+        limit: int = 300,
+        filter_obj: Optional[Dict] = None
+    ) -> List[Dict[str, Any]]:
+        url = self._build_url(PROJECT_BUDGET_ENTRY_ID, 'data')
+        payload = {
+            'skip': skip,
+            'limit': limit
+        }
+        if filter_obj:
+            payload['filter'] = filter_obj
+        result = self._request('POST', url, json=payload)
+        return [
+            self._map_project_budget_from_alias(item)
+            for item in result.get('data', [])
+        ]
+
+    def update_project_budget(self, data_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
+        if not data:
+            return {}
+        payload = dict(data)
+        details = None
+        if 'cost_details' in payload:
+            details = payload.pop('cost_details')
+        supported_fields = {k: v for k, v in PROJECT_BUDGET_FIELDS_EN.items() if k in payload}
+        mapped_data = FieldMapper.map_to_alias(payload, supported_fields)
+        if details is not None:
+            mapped_data[PROJECT_BUDGET_FIELDS_EN['cost_details']] = self._map_budget_details_to_alias(details)
+        url = self._build_url(PROJECT_BUDGET_ENTRY_ID, 'data_update')
+        result = self._request('POST', url, json={
+            'data_id': data_id,
+            'data': mapped_data
+        })
+        return self._map_project_budget_from_alias(result.get('data', {}))
+
+    def delete_project_budget(self, data_id: str) -> bool:
+        url = self._build_url(PROJECT_BUDGET_ENTRY_ID, 'data_delete')
+        self._request('POST', url, json={
+            'data_id': data_id,
+            'is_start_event': False,
+            'operator': ''
+        })
+        return True
+
+    def upload_project_budget_files(self, files: List[Dict[str, str]]) -> List[Dict[str, Any]]:
+        url = self._build_url(PROJECT_BUDGET_ENTRY_ID, 'upload_file')
         result = self._request('POST', url, json=files)
         return result.get('data', [])
 

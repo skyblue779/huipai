@@ -28,6 +28,9 @@ COST_TYPE_ENTRY_ID = '30e046f98508908b9ae064ae'
 
 PROJECT_PROGRESS_ENTRY_ID = '11714a488b65fc5074a981cd'
 
+# 项目预算/成本管理表
+PROJECT_BUDGET_ENTRY_ID = '7235499ba8fd3f91362c04ce'
+
 # CORS配置
 CORS_ORIGINS = ['http://localhost:3000', 'http://localhost:8080', 'http://127.0.0.1:5000']
 

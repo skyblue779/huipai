@@ -31,6 +31,7 @@ COST_STAGE_FIELDS_EN = {
     'sort_order': '_widget_1769130163598',
     'description': '_widget_1769150079419',
     'project_type': '_widget_1769152663361',
+    'budget_standard': '_widget_1770193455058',
 }
 
 # 项目类型表字段映射 (entry: 6e32422ead05c1ce9790f812)
@@ -93,6 +94,31 @@ PROJECT_PROGRESS_FIELDS_EN = {
 PROJECT_PROGRESS_REVERSE_EN = {v: k for k, v in PROJECT_PROGRESS_FIELDS_EN.items()}
 
 PROJECT_REVERSE = {v: k for k, v in PROJECT_FIELDS.items()}
+
+# 项目预算管理表字段映射 (entry: 7235499ba8fd3f91362c04ce)
+PROJECT_BUDGET_FIELDS_EN = {
+    'project_code': '_widget_1770184687558',
+    'project_name': '_widget_1770184687577',
+    'project_type': '_widget_1770184687725',
+    'cost_center': '_widget_1770184687688',
+    'cost_item': '_widget_1770184687651',
+    'main_stage_order': '_widget_1770184687596',
+    'project_stage_order': '_widget_1770184687871',
+    'status': '_widget_1770184688070',
+    'budget_standard': '_widget_1770184688128',
+    'actual_total': '_widget_1770184688149',
+    'cost_details': '_widget_1770184688372',
+}
+
+PROJECT_BUDGET_DETAIL_FIELDS_EN = {
+    'detail_date': '_widget_1770184688515',
+    'detail_item': '_widget_1770184688732',
+    'detail_amount': '_widget_1770184688945',
+    'detail_remark': '_widget_1770184688999',
+}
+
+PROJECT_BUDGET_REVERSE_EN = {v: k for k, v in PROJECT_BUDGET_FIELDS_EN.items()}
+PROJECT_BUDGET_DETAIL_REVERSE_EN = {v: k for k, v in PROJECT_BUDGET_DETAIL_FIELDS_EN.items()}
 
 
 class FieldMapper:

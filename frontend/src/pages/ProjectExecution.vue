@@ -307,13 +307,16 @@ const submitForm = ref({
 
 const uploadFileList = ref([]);
 
+// 获取 URL 查询参数
 const getQueryParam = (paramName) => {
   const urlParams = new URLSearchParams(window.location.search);
   return urlParams.get(paramName);
 };
 
+// 是否存在用户标识
 const hasUserId = computed(() => Boolean(userParam.value));
 
+// 解析日期值为 Date
 const parseDateValue = (value) => {
   if (!value) return null;
   if (value instanceof Date) return value;
@@ -327,6 +330,7 @@ const parseDateValue = (value) => {
   return null;
 };
 
+// 解析日期区间
 const parseDateRange = (value) => {
   if (!value) return { start: null, end: null };
   if (Array.isArray(value)) {
@@ -355,6 +359,7 @@ const parseDateRange = (value) => {
   return { start: single, end: null };
 };
 
+// 格式化日期展示
 const formatDate = (value) => {
   if (!value) return '--';
   if (typeof value === 'string') {
@@ -369,11 +374,13 @@ const formatDate = (value) => {
   return `${year}-${month}-${day}`;
 };
 
+// 表格日期展示格式
 const formatDateCell = (value) => {
   if (!value) return '';
   return formatDate(value);
 };
 
+// 格式化执行人显示
 const formatUser = (value) => {
   if (!value) return '';
   if (Array.isArray(value)) {
@@ -386,6 +393,7 @@ const formatUser = (value) => {
   return String(value);
 };
 
+// 提取执行人 ID 列表
 const getExecutorIds = (value) => {
   if (!value) return [];
   if (Array.isArray(value)) {
@@ -404,12 +412,14 @@ const getExecutorIds = (value) => {
   return [String(value)];
 };
 
+// 统一 token 格式
 const normalizeToken = (value) => {
   if (value === null || value === undefined) return '';
   const text = String(value).trim();
   return text ? text.toLowerCase() : '';
 };
 
+// 拆分名字文本为 token
 const splitNameText = (value) => {
   if (!value) return [];
   if (Array.isArray(value)) {
@@ -424,6 +434,7 @@ const splitNameText = (value) => {
     .filter(Boolean);
 };
 
+// 构建 token 集合
 const buildTokenSet = (values) => {
   const set = new Set();
   values.forEach((value) => {
@@ -433,6 +444,7 @@ const buildTokenSet = (values) => {
   return set;
 };
 
+// 从执行人字段收集 token
 const collectExecutorTokens = (executorRaw) => {
   const tokens = [];
   const walk = (value) => {
@@ -451,8 +463,10 @@ const collectExecutorTokens = (executorRaw) => {
   return buildTokenSet(tokens);
 };
 
+// 从执行人字段收集姓名 token
 const collectExecutorNameTokens = (executorRaw) => buildTokenSet(splitNameText(executorRaw));
 
+// 当前用户 token 集合
 const userTokenSet = computed(() =>
   buildTokenSet([
     userParam.value,
@@ -463,14 +477,17 @@ const userTokenSet = computed(() =>
   ])
 );
 
+// 当前用户名 token 集合
 const userNameTokenSet = computed(() => buildTokenSet(splitNameText(userProfile.value.name || userParam.value)));
 
+// 标准化文本展示
 const normalizeLabel = (value) => {
   if (value === null || value === undefined) return '';
   if (typeof value === 'string') return value.trim();
   return String(value);
 };
 
+// 规范化记录为前端展示结构
 const normalizeRecord = (record, index) => {
   const planRange = parseDateRange(record.plan_time);
   const planStartDate = planRange.start || null;
@@ -511,8 +528,10 @@ const normalizeRecord = (record, index) => {
   };
 };
 
+// 规范化后的记录列表
 const normalizedRecords = computed(() => progressRecords.value.map(normalizeRecord));
 
+// 搜索匹配
 const matchesSearch = (row, query) => {
   const pool = [
     row.projectName,
@@ -527,6 +546,7 @@ const matchesSearch = (row, query) => {
   return pool.some((item) => item.includes(query));
 };
 
+// 判断是否属于当前用户
 const matchesUser = (row) => {
   const executorNameTokens = collectExecutorNameTokens(row.executorRaw);
   const hasNameMatch =
@@ -544,6 +564,7 @@ const matchesUser = (row) => {
   return hasExecutorIdMatch || hasExecutorTokenMatch;
 };
 
+// 统一排序比较方法
 const compareOrderValue = (a, b) => {
   if (a === null || a === undefined) return b === null || b === undefined ? 0 : 1;
   if (b === null || b === undefined) return -1;
@@ -554,23 +575,28 @@ const compareOrderValue = (a, b) => {
 const hiddenStatuses = new Set(['完成', '超期完成']);
 const currentPage = ref(1);
 const pageSize = ref(10);
+// 归一化搜索关键字
 const searchQueryLower = computed(() => searchQuery.value.trim().toLowerCase());
 
+// 当前用户匹配到的记录
 const userMatchedRecords = computed(() => {
   if (!hasUserId.value) return [];
   return normalizedRecords.value.filter(matchesUser);
 });
 
+// 搜索后的记录
 const searchedUserRecords = computed(() => {
   const query = searchQueryLower.value;
   if (!query) return userMatchedRecords.value;
   return userMatchedRecords.value.filter((row) => matchesSearch(row, query));
 });
 
+// 过滤掉不展示的状态
 const filteredRecords = computed(() => {
   return searchedUserRecords.value.filter((row) => !hiddenStatuses.has(row.status));
 });
 
+// 表格展示数据（排序后）
 const tableRows = computed(() => {
   const rows = [...filteredRecords.value];
   rows.sort((a, b) => {
@@ -583,10 +609,13 @@ const tableRows = computed(() => {
   return rows;
 });
 
+// 判断是否已完成
 const isDone = (status) => status === '完成' || status === '超期完成';
 
+// 判断是否超期
 const isOverdueRow = (row) => row?.status === '超期';
 
+// 统计卡片数据
 const totalCount = computed(() => tableRows.value.length);
 const doneCount = computed(() => tableRows.value.filter((row) => isDone(row.status)).length);
 const overdueCount = computed(() => tableRows.value.filter((row) => isOverdueRow(row)).length);
@@ -594,6 +623,7 @@ const pendingCount = computed(() => Math.max(totalCount.value - doneCount.value,
 const waitingCount = computed(() => tableRows.value.filter((row) => row.status !== '超期').length);
 const overallCount = computed(() => searchedUserRecords.value.length);
 
+// 移动端按项目分组
 const mobileGroups = computed(() => {
   const map = new Map();
   tableRows.value.forEach((row) => {
@@ -606,25 +636,30 @@ const mobileGroups = computed(() => {
   return Array.from(map.values());
 });
 
+// 弹窗宽度自适应
 const dialogWidth = computed(() => (isMobile.value ? '96%' : '680px'));
 
+// 当前分页数据
 const pagedRows = computed(() => {
   const start = (currentPage.value - 1) * pageSize.value;
   return tableRows.value.slice(start, start + pageSize.value);
 });
 
+// 状态标签样式
 const getStatusTag = (status) => {
   if (status === '完成' || status === '超期完成') return 'success';
   if (status === '超期') return 'danger';
   return 'info';
 };
 
+// 计划时间展示
 const formatRange = (start, end) => {
   if (!start && !end) return '--';
   if (start && end) return `${start} ~ ${end}`;
   return start || end;
 };
 
+// 拉取执行进度数据
 const loadProgressRecords = async () => {
   loading.value = true;
   try {
@@ -647,25 +682,30 @@ const loadProgressRecords = async () => {
   }
 };
 
+// 执行搜索
 const handleSearch = async () => {
   await loadProgressRecords();
 };
 
+// 切换分页
 const handlePageChange = (page) => {
   currentPage.value = page;
 };
 
+// 切换每页大小
 const handlePageSizeChange = (size) => {
   pageSize.value = size;
   currentPage.value = 1;
 };
 
+// 打开详情弹窗
 const openDetailDialog = (row) => {
   if (!row) return;
   detailRow.value = row;
   detailDialogVisible.value = true;
 };
 
+// 打开提交弹窗
 const openSubmitDialog = (row) => {
   if (!row) return;
   submitRow.value = row;
@@ -678,6 +718,7 @@ const openSubmitDialog = (row) => {
   submitDialogVisible.value = true;
 };
 
+// 判断当前提交是否超期
 const submitIsOverdue = computed(() => {
   if (!submitRow.value) return false;
   if (submitRow.value.status === '超期') return true;
@@ -688,6 +729,7 @@ const submitIsOverdue = computed(() => {
   return checkDate.getTime() > planEnd.getTime();
 });
 
+// 统一附件名称展示
 const formatAttachmentName = (item) => {
   if (!item) return '';
   if (typeof item === 'string') return item;
@@ -704,6 +746,7 @@ const formatAttachmentName = (item) => {
   );
 };
 
+// 规范化附件列表
 const normalizeAttachmentList = (value) => {
   if (!value) return [];
   if (Array.isArray(value)) {
@@ -713,8 +756,10 @@ const normalizeAttachmentList = (value) => {
   return single ? [String(single)] : [];
 };
 
+// 详情附件列表
 const detailAttachments = computed(() => normalizeAttachmentList(detailRow.value?.siteUploadRaw));
 
+// 构建上传表单数据
 const buildUploadFormData = (fileList) => {
   const formData = new FormData();
   fileList.forEach((item) => {
@@ -724,6 +769,7 @@ const buildUploadFormData = (fileList) => {
   return formData;
 };
 
+// 上传附件并返回文件信息
 const uploadFiles = async () => {
   if (!uploadFileList.value.length) return [];
   const formData = buildUploadFormData(uploadFileList.value);
@@ -734,12 +780,14 @@ const uploadFiles = async () => {
   throw new Error(result?.msg || '上传失败');
 };
 
+// 合并新旧附件列表
 const mergeSiteUploads = (existing, uploaded) => {
   const existingList = Array.isArray(existing) ? existing : existing ? [existing] : [];
   const uploadedList = Array.isArray(uploaded) ? uploaded : uploaded ? [uploaded] : [];
   return [...existingList, ...uploadedList];
 };
 
+// 提交执行信息
 const handleSubmit = async () => {
   if (!submitRow.value?.recordId) {
     ElMessage.error('无法提交：缺少记录ID');
@@ -796,14 +844,17 @@ const handleSubmit = async () => {
   }
 };
 
+// 上传超限提示
 const handleUploadExceed = () => {
   ElMessage.warning('最多上传 5 个文件');
 };
 
+// 同步上传文件列表
 const handleUploadFileListChange = (fileList) => {
   uploadFileList.value = fileList;
 };
 
+// 关闭提交弹窗时重置状态
 watch(submitDialogVisible, (visible) => {
   if (!visible) {
     submitRow.value = null;
@@ -811,10 +862,12 @@ watch(submitDialogVisible, (visible) => {
   }
 });
 
+// 监听窗口尺寸切换布局
 const handleResize = () => {
   isMobile.value = window.innerWidth <= 768;
 };
 
+// 分页边界修正
 watch(
   [tableRows, pageSize],
   () => {
@@ -826,6 +879,7 @@ watch(
   { immediate: true }
 );
 
+// 根据用户参数拉取用户信息
 const resolveUserProfile = async () => {
   if (!userParam.value) return;
   try {
@@ -864,6 +918,7 @@ const resolveUserProfile = async () => {
   }
 };
 
+// 页面初始化
 onMounted(async () => {
   handleResize();
   window.addEventListener('resize', handleResize);
@@ -874,7 +929,8 @@ onMounted(async () => {
     await resolveUserProfile();
   }
   await loadProgressRecords();
-    function getQueryParam(paramName) {
+  // 兼容旧逻辑的参数读取
+  function getQueryParam(paramName) {
     const urlParams = new URLSearchParams(window.location.search);
     return urlParams.get(paramName);
   }
@@ -884,6 +940,7 @@ onMounted(async () => {
   console.log('Webpage User ID:', userId);
 });
 
+// 页面卸载时移除监听
 onBeforeUnmount(() => {
   window.removeEventListener('resize', handleResize);
 });

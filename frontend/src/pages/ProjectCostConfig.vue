@@ -103,6 +103,11 @@
               <el-form-item label="阶段ID">
                 <el-input v-model="formData.id" disabled />
               </el-form-item>
+              <el-form-item label="预算标准">
+                <el-input v-model.number="formData.budget_standard" type="number">
+                  <template #append>元</template>
+                </el-input>
+              </el-form-item>
               <el-form-item label="说明">
                 <el-input
                   v-model="formData.description"
@@ -157,7 +162,8 @@ const formData = reactive({
   _id: '',
   name: '',
   id: '',
-  description: ''
+  description: '',
+  budget_standard: 0
 });
 
 const treeProps = {
@@ -165,6 +171,7 @@ const treeProps = {
   label: 'name'
 };
 
+// 将节点编号转换为可比对的 key
 const toKey = (value) => {
   if (value === null || value === undefined || value === '') return null;
   const numeric = Number(value);
@@ -175,12 +182,14 @@ const toKey = (value) => {
   return Number.isNaN(parsed) ? trimmed : parsed;
 };
 
+// 判断节点是否有子节点
 const hasChildren = (nodeData) => {
   const key = toKey(nodeData?.id);
   if (key === null) return false;
   return stages.value.some((stage) => toKey(stage.parent_id) === key);
 };
 
+// 生成树形结构数据（按排序字段排序）
 const treeData = computed(() => {
   if (!stages.value.length) return [];
 
@@ -204,14 +213,17 @@ const treeData = computed(() => {
   return buildTree(roots);
 });
 
+// 清空当前选中与表单数据
 const resetSelection = () => {
   currentNode.value = null;
   formData._id = '';
   formData.name = '';
   formData.id = '';
   formData.description = '';
+  formData.budget_standard = 0;
 };
 
+// 加载项目类型下拉数据
 const loadProjectTypes = async () => {
   try {
     const result = await api.listCostTypes({ skip: 0, limit: 300 });
@@ -233,6 +245,7 @@ const loadProjectTypes = async () => {
   }
 };
 
+// 加载成本阶段配置数据
 const loadStages = async () => {
   loading.value = true;
   try {
@@ -254,11 +267,13 @@ const loadStages = async () => {
   }
 };
 
+// 切换项目类型时刷新阶段
 const handleProjectTypeChange = async () => {
   resetSelection();
   await loadStages();
 };
 
+// 点击节点时填充编辑表单
 const handleNodeClick = (data) => {
   if (!data) return;
   currentNode.value = { ...data };
@@ -266,8 +281,10 @@ const handleNodeClick = (data) => {
   formData.name = data.name || '';
   formData.id = data.id || '';
   formData.description = data.description || '';
+  formData.budget_standard = data.budget_standard ?? 0;
 };
 
+// 新增主阶段
 const handleAddStage = async () => {
   if (!selectedProjectType.value) {
     ElMessage.warning('请先选择项目类型');
@@ -292,7 +309,8 @@ const handleAddStage = async () => {
     const newStage = {
       name: value,
       sort_order: maxSort + 1,
-      project_type: selectedProjectType.value
+      project_type: selectedProjectType.value,
+      budget_standard: 0
     };
 
     const result = await api.createCostStage(newStage);
@@ -314,6 +332,7 @@ const handleAddStage = async () => {
   }
 };
 
+// 新增子阶段
 const handleAddNode = async (parentData) => {
   if (!parentData?.id) {
     ElMessage.warning('父节点无效');
@@ -341,7 +360,8 @@ const handleAddNode = async (parentData) => {
       name: value,
       parent_id: parentKey,
       sort_order: maxSort + 1,
-      project_type: selectedProjectType.value
+      project_type: selectedProjectType.value,
+      budget_standard: 0
     };
 
     const result = await api.createCostStage(newStage);
@@ -377,6 +397,7 @@ const handleAddNode = async (parentData) => {
   }
 };
 
+// 保存阶段编辑
 const handleSave = async () => {
   if (!formData.name.trim()) {
     ElMessage.warning('名称不能为空');
@@ -387,7 +408,8 @@ const handleSave = async () => {
     const dataToSave = {
       name: formData.name,
       description: formData.description,
-      project_type: selectedProjectType.value
+      project_type: selectedProjectType.value,
+      budget_standard: Number(formData.budget_standard || 0)
     };
 
     const result = await api.updateCostStage(formData._id, dataToSave);
@@ -404,6 +426,7 @@ const handleSave = async () => {
   }
 };
 
+// 删除阶段节点
 const handleDelete = async (data) => {
   const dataKey = toKey(data?.id);
   const childCount = stages.value.filter((stage) => toKey(stage.parent_id) === dataKey).length;
@@ -439,6 +462,7 @@ const handleDelete = async (data) => {
   }
 };
 
+// 页面初始化时加载项目类型
 onMounted(async () => {
   await loadProjectTypes();
 });

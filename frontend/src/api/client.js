@@ -131,6 +131,45 @@ const uploadProjectProgressFiles = (files) => {
   return request('POST', '/api/progress/upload', files);
 };
 
+const listProjectBudgets = ({
+  skip = 0,
+  limit = 300,
+  search = '',
+  projectCode = '',
+  projectName = '',
+  projectType = '',
+  costCenter = '',
+  costItem = '',
+  status = '',
+  mainStageOrder = '',
+  projectStageOrder = ''
+} = {}) => {
+  const params = new URLSearchParams({
+    skip: String(skip),
+    limit: String(limit)
+  });
+  if (search) params.set('search', search);
+  if (projectCode) params.set('project_code', projectCode);
+  if (projectName) params.set('project_name', projectName);
+  if (projectType) params.set('project_type', projectType);
+  if (costCenter) params.set('cost_center', costCenter);
+  if (costItem) params.set('cost_item', costItem);
+  if (status) params.set('status', status);
+  if (mainStageOrder) params.set('main_stage_order', mainStageOrder);
+  if (projectStageOrder) params.set('project_stage_order', projectStageOrder);
+  return request('GET', `/api/project-budget/list?${params.toString()}`);
+};
+
+const createProjectBudget = (data) => request('POST', '/api/project-budget/create', data);
+const updateProjectBudget = (dataId, data) => request('PUT', `/api/project-budget/update/${dataId}`, data);
+const deleteProjectBudget = (dataId) => request('DELETE', `/api/project-budget/delete/${dataId}`);
+const uploadProjectBudgetFiles = (files) => {
+  if (files instanceof FormData) {
+    return requestForm('POST', '/api/project-budget/upload', files);
+  }
+  return request('POST', '/api/project-budget/upload', files);
+};
+
 const listUsers = () => request('GET', '/api/user/list');
 const getUserInfo = (userId) => request('GET', `/api/user/info/${userId}`);
 
@@ -150,6 +189,11 @@ export default {
   updateProjectProgress,
   deleteProjectProgress,
   uploadProjectProgressFiles,
+  listProjectBudgets,
+  createProjectBudget,
+  updateProjectBudget,
+  deleteProjectBudget,
+  uploadProjectBudgetFiles,
   listUsers,
   getUserInfo
 };
