@@ -5,6 +5,7 @@ import ProjectBudgetManagement from '../pages/ProjectBudgetManagement.vue';
 import ProjectProgressManagement from '../pages/ProjectProgressManagement.vue';
 import ProjectExecution from '../pages/ProjectExecution.vue';
 import OverallBudgetDashboard from '../pages/OverallBudgetDashboard.vue';
+import ProjectControlDashboard from '../pages/ProjectControlDashboard.vue';
 
 const routes = [
   {
@@ -20,6 +21,11 @@ const routes = [
     path: '/overall-budget-dashboard',
     name: 'OverallBudgetDashboard',
     component: OverallBudgetDashboard
+  },
+  {
+    path: '/project-control-dashboard',
+    name: 'ProjectControlDashboard',
+    component: ProjectControlDashboard
   },
   {
     path: '/project-cost-config',
