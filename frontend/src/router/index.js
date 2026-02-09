@@ -6,6 +6,7 @@ import ProjectProgressManagement from '../pages/ProjectProgressManagement.vue';
 import ProjectExecution from '../pages/ProjectExecution.vue';
 import OverallBudgetDashboard from '../pages/OverallBudgetDashboard.vue';
 import ProjectControlDashboard from '../pages/ProjectControlDashboard.vue';
+import DeliveryManagement from '../pages/DeliveryManagement.vue';
 
 const routes = [
   {
@@ -46,6 +47,11 @@ const routes = [
     path: '/project-execution',
     name: 'ProjectExecution',
     component: ProjectExecution
+  },
+  {
+    path: '/delivery-management',
+    name: 'DeliveryManagement',
+    component: DeliveryManagement
   }
 ];
 

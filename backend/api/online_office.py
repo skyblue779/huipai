@@ -15,6 +15,8 @@ from config import (
     COST_TYPE_ENTRY_ID,
     PROJECT_PROGRESS_ENTRY_ID,
     PROJECT_BUDGET_ENTRY_ID,
+    DELIVERY_ENTRY_ID,
+    INSPECTION_ENTRY_ID,
     REQUEST_TIMEOUT
 )
 from field_mapping import (
@@ -34,6 +36,12 @@ from field_mapping import (
     PROJECT_BUDGET_DETAIL_FIELDS_EN,
     PROJECT_BUDGET_REVERSE_EN,
     PROJECT_BUDGET_DETAIL_REVERSE_EN,
+    DELIVERY_FIELDS_EN,
+    DELIVERY_ITEM_FIELDS_EN,
+    DELIVERY_REVERSE_EN,
+    DELIVERY_ITEM_REVERSE_EN,
+    INSPECTION_FIELDS_EN,
+    INSPECTION_REVERSE_EN,
 )
 
 logger = logging.getLogger(__name__)
@@ -444,6 +452,133 @@ class OnlineOfficeAPI:
         url = self._build_url(PROJECT_BUDGET_ENTRY_ID, 'upload_file')
         result = self._request('POST', url, json=files)
         return result.get('data', [])
+
+    # ==================== Delivery operations ====================
+
+    @staticmethod
+    def _map_delivery_items_to_alias(details: Any) -> List[Dict[str, Any]]:
+        if not isinstance(details, list):
+            return []
+        mapped = []
+        for item in details:
+            if isinstance(item, dict):
+                mapped.append(FieldMapper.map_to_alias(item, DELIVERY_ITEM_FIELDS_EN))
+        return mapped
+
+    @staticmethod
+    def _map_delivery_items_from_alias(details: Any) -> List[Dict[str, Any]]:
+        if not isinstance(details, list):
+            return []
+        mapped = []
+        for item in details:
+            if isinstance(item, dict):
+                mapped.append(FieldMapper.map_from_alias(item, DELIVERY_ITEM_REVERSE_EN))
+        return mapped
+
+    @staticmethod
+    def _normalize_delivery_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
+        value = payload.get('inspection_items')
+        if value is None:
+            return payload
+        if isinstance(value, list):
+            return payload
+        if isinstance(value, str):
+            trimmed = value.strip()
+            payload['inspection_items'] = [trimmed] if trimmed else []
+            return payload
+        payload['inspection_items'] = [value]
+        return payload
+
+    def _map_delivery_from_alias(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        mapped = FieldMapper.map_from_alias(data, DELIVERY_REVERSE_EN)
+        items_key = DELIVERY_REVERSE_EN.get(DELIVERY_FIELDS_EN['cargo_items'])
+        if items_key and items_key in mapped:
+            mapped[items_key] = self._map_delivery_items_from_alias(mapped.get(items_key))
+        return mapped
+
+    def list_deliveries(
+        self,
+        skip: int = 0,
+        limit: int = 300,
+        filter_obj: Optional[Dict] = None
+    ) -> List[Dict]:
+        url = self._build_url(DELIVERY_ENTRY_ID, 'data')
+        payload = {
+            'skip': skip,
+            'limit': limit
+        }
+        if filter_obj:
+            payload['filter'] = filter_obj
+        result = self._request('POST', url, json=payload)
+        return [
+            self._map_delivery_from_alias(item)
+            for item in result.get('data', [])
+        ]
+
+    def get_delivery(self, data_id: str) -> Dict[str, Any]:
+        url = self._build_url(DELIVERY_ENTRY_ID, 'data_retrieve')
+        result = self._request('POST', url, json={'data_id': data_id})
+        data = result.get('data', {})
+        return self._map_delivery_from_alias(data)
+
+    def create_delivery(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        payload = self._normalize_delivery_payload(dict(data))
+        details = payload.pop('cargo_items', None)
+        mapped_data = FieldMapper.map_to_alias(payload, DELIVERY_FIELDS_EN)
+        if details is not None:
+            mapped_data[DELIVERY_FIELDS_EN['cargo_items']] = self._map_delivery_items_to_alias(details)
+        url = self._build_url(DELIVERY_ENTRY_ID, 'data_create')
+        result = self._request('POST', url, json={'data': mapped_data})
+        return self._map_delivery_from_alias(result.get('data', {}))
+
+    def update_delivery(self, data_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
+        payload = self._normalize_delivery_payload(dict(data))
+        details = payload.pop('cargo_items', None)
+        supported_fields = {k: v for k, v in DELIVERY_FIELDS_EN.items() if k in payload}
+        mapped_data = FieldMapper.map_to_alias(payload, supported_fields)
+        if details is not None:
+            mapped_data[DELIVERY_FIELDS_EN['cargo_items']] = self._map_delivery_items_to_alias(details)
+        url = self._build_url(DELIVERY_ENTRY_ID, 'data_update')
+        result = self._request('POST', url, json={
+            'data_id': data_id,
+            'data': mapped_data
+        })
+        return self._map_delivery_from_alias(result.get('data', {}))
+
+    def delete_delivery(self, data_id: str) -> bool:
+        url = self._build_url(DELIVERY_ENTRY_ID, 'data_delete')
+        self._request('POST', url, json={
+            'data_id': data_id,
+            'is_start_event': False,
+            'operator': ''
+        })
+        return True
+
+    def upload_delivery_files(self, files: List[Dict[str, str]]) -> List[Dict[str, Any]]:
+        url = self._build_url(DELIVERY_ENTRY_ID, 'upload_file')
+        result = self._request('POST', url, json=files)
+        return result.get('data', [])
+
+    # ==================== Inspection operations ====================
+
+    def list_inspections(
+        self,
+        skip: int = 0,
+        limit: int = 300,
+        filter_obj: Optional[Dict] = None
+    ) -> List[Dict[str, Any]]:
+        url = self._build_url(INSPECTION_ENTRY_ID, 'data')
+        payload = {
+            'skip': skip,
+            'limit': limit
+        }
+        if filter_obj:
+            payload['filter'] = filter_obj
+        result = self._request('POST', url, json=payload)
+        return [
+            FieldMapper.map_from_alias(item, INSPECTION_REVERSE_EN)
+            for item in result.get('data', [])
+        ]
 
     # ==================== User directory operations ====================
 

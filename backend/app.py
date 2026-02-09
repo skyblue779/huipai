@@ -13,6 +13,8 @@ from api.cost_type import cost_type_bp
 from api.project_progress import progress_bp
 from api.user import user_bp
 from api.project_budget import project_budget_bp
+from api.delivery import delivery_bp
+from api.inspection import inspection_bp
 
 # 配置日志
 logging.basicConfig(level=logging.INFO)
@@ -49,6 +51,8 @@ def create_app():
     app.register_blueprint(progress_bp)
     app.register_blueprint(user_bp)
     app.register_blueprint(project_budget_bp)
+    app.register_blueprint(delivery_bp)
+    app.register_blueprint(inspection_bp)
     
     # 健康检查端点
     @app.route('/uploads/<path:filename>', methods=['GET'])

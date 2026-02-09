@@ -177,6 +177,47 @@ const listProjectBudgets = ({
   return request('GET', `/api/project-budget/list?${params.toString()}`);
 };
 
+const listDeliveries = ({
+  skip = 0,
+  limit = 300,
+  search = '',
+  deliveryNo = '',
+  projectName = '',
+  orderNo = '',
+  status = ''
+} = {}) => {
+  const params = new URLSearchParams({
+    skip: String(skip),
+    limit: String(limit)
+  });
+  if (search) params.set('search', search);
+  if (deliveryNo) params.set('delivery_no', deliveryNo);
+  if (projectName) params.set('project_name', projectName);
+  if (orderNo) params.set('order_no', orderNo);
+  if (status) params.set('status', status);
+  return request('GET', `/api/delivery/list?${params.toString()}`);
+};
+
+const listInspections = ({ skip = 0, limit = 300, search = '', inspectionProject = '' } = {}) => {
+  const params = new URLSearchParams({
+    skip: String(skip),
+    limit: String(limit)
+  });
+  if (search) params.set('search', search);
+  if (inspectionProject) params.set('inspection_project', inspectionProject);
+  return request('GET', `/api/inspection/list?${params.toString()}`);
+};
+
+const createDelivery = (data) => request('POST', '/api/delivery/create', data);
+const updateDelivery = (dataId, data) => request('PUT', `/api/delivery/update/${dataId}`, data);
+const deleteDelivery = (dataId) => request('DELETE', `/api/delivery/delete/${dataId}`);
+const uploadDeliveryFiles = (files) => {
+  if (files instanceof FormData) {
+    return requestForm('POST', '/api/delivery/upload', files);
+  }
+  return request('POST', '/api/delivery/upload', files);
+};
+
 const createProjectBudget = (data) => request('POST', '/api/project-budget/create', data);
 const updateProjectBudget = (dataId, data) => request('PUT', `/api/project-budget/update/${dataId}`, data);
 const deleteProjectBudget = (dataId) => request('DELETE', `/api/project-budget/delete/${dataId}`);
@@ -212,6 +253,12 @@ export default {
   updateProjectBudget,
   deleteProjectBudget,
   uploadProjectBudgetFiles,
+  listDeliveries,
+  listInspections,
+  createDelivery,
+  updateDelivery,
+  deleteDelivery,
+  uploadDeliveryFiles,
   listUsers,
   getUserInfo
 };

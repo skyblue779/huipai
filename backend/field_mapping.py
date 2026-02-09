@@ -139,6 +139,39 @@ PROJECT_BUDGET_DETAIL_FIELDS_EN = {
 PROJECT_BUDGET_REVERSE_EN = {v: k for k, v in PROJECT_BUDGET_FIELDS_EN.items()}
 PROJECT_BUDGET_DETAIL_REVERSE_EN = {v: k for k, v in PROJECT_BUDGET_DETAIL_FIELDS_EN.items()}
 
+# 发货管理表字段映射 (entry: 7f214b928a8811cfd38e6d2c)
+DELIVERY_FIELDS_EN = {
+    'delivery_no': '_widget_1770458498302',
+    'project_name': '_widget_1770458498418',
+    'delivery_date': '_widget_1770458498335',
+    'order_no': '_widget_1770458498316',
+    'delivery_address': '_widget_1770458498468',
+    'inspection_items': '_widget_1770599794961',
+    'status': '_widget_1770458499012',
+    'cargo_items': '_widget_1770458498505',
+    'logistics_company': '_widget_1770458498887',
+    'logistics_no': '_widget_1770458498924',
+    'remark': '_widget_1770458498943',
+}
+
+DELIVERY_ITEM_FIELDS_EN = {
+    'product_name': '_widget_1770458498530',
+    'spec_model': '_widget_1770458498597',
+    'quantity': '_widget_1770458498729',
+    'unit': '_widget_1770458498665',
+}
+
+DELIVERY_REVERSE_EN = {v: k for k, v in DELIVERY_FIELDS_EN.items()}
+DELIVERY_ITEM_REVERSE_EN = {v: k for k, v in DELIVERY_ITEM_FIELDS_EN.items()}
+
+# 检测项目表字段映射 (entry: 37f8492484812d6cd8781fc8)
+INSPECTION_FIELDS_EN = {
+    'inspection_no': '_widget_1770600279891',
+    'inspection_project': '_widget_1770600279908',
+}
+
+INSPECTION_REVERSE_EN = {v: k for k, v in INSPECTION_FIELDS_EN.items()}
+
 
 class FieldMapper:
     """字段映射工具类"""
