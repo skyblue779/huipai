@@ -126,6 +126,7 @@ PROJECT_BUDGET_FIELDS_EN = {
     'budget_standard': '_widget_1770184688128',
     'actual_total': '_widget_1770184688149',
     'cost_details': '_widget_1770184688372',
+    'variance_root_cause': '_widget_1770362492081',
 }
 
 PROJECT_BUDGET_DETAIL_FIELDS_EN = {
