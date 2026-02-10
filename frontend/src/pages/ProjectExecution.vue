@@ -1,5 +1,6 @@
 ﻿<template>
-  <div class="main-content">
+  <el-config-provider :locale="zhCn">
+    <div class="main-content">
     <div class="page-container">
       <div class="execution-header">
         <div class="header-left">
@@ -272,12 +273,13 @@
         <el-button type="primary" :loading="submitting" @click="handleSubmit">确认提交</el-button>
       </template>
     </el-dialog>
-  </div>
+    </div>
+  </el-config-provider>
 </template>
 
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue';
-import { ElMessage } from 'element-plus';
+import { ElMessage, ElConfigProvider } from 'element-plus';
 import { UploadFilled, Bell, Flag, WarningFilled, TrendCharts } from '@element-plus/icons-vue';
 import zhCn from 'element-plus/es/locale/lang/zh-cn';
 import api from '../api/client';

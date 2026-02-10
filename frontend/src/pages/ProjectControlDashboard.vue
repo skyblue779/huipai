@@ -1,5 +1,6 @@
 <template>
-  <div class="dashboard-container">
+  <el-config-provider :locale="zhCn">
+    <div class="dashboard-container">
     <div class="main-content">
       <!-- 页面内容容器 -->
       <div class="page-container" v-loading="loading">
@@ -101,14 +102,16 @@
         </div>
       </div>
     </div>
-  </div>
+    </div>
+  </el-config-provider>
 </template>
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue';
 import * as echarts from 'echarts';
 import { Refresh } from '@element-plus/icons-vue';
-import { ElMessage } from 'element-plus';
+import { ElMessage, ElConfigProvider } from 'element-plus';
+import zhCn from 'element-plus/es/locale/lang/zh-cn';
 import api from '../api/client';
 
 // 状态定义

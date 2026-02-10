@@ -208,6 +208,28 @@ const listInspections = ({ skip = 0, limit = 300, search = '', inspectionProject
   return request('GET', `/api/inspection/list?${params.toString()}`);
 };
 
+const listInspectionDeliveries = ({
+  skip = 0,
+  limit = 300,
+  search = '',
+  deliveryNo = '',
+  projectName = '',
+  handoverStatus = ''
+} = {}) => {
+  const params = new URLSearchParams({
+    skip: String(skip),
+    limit: String(limit)
+  });
+  if (search) params.set('search', search);
+  if (deliveryNo) params.set('delivery_no', deliveryNo);
+  if (projectName) params.set('project_name', projectName);
+  if (handoverStatus) params.set('handover_status', handoverStatus);
+  return request('GET', `/api/inspection-delivery/list?${params.toString()}`);
+};
+
+const updateInspectionDelivery = (dataId, data) =>
+  request('PUT', `/api/inspection-delivery/update/${dataId}`, data);
+
 const createDelivery = (data) => request('POST', '/api/delivery/create', data);
 const updateDelivery = (dataId, data) => request('PUT', `/api/delivery/update/${dataId}`, data);
 const deleteDelivery = (dataId) => request('DELETE', `/api/delivery/delete/${dataId}`);
@@ -255,6 +277,8 @@ export default {
   uploadProjectBudgetFiles,
   listDeliveries,
   listInspections,
+  listInspectionDeliveries,
+  updateInspectionDelivery,
   createDelivery,
   updateDelivery,
   deleteDelivery,

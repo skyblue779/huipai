@@ -1,5 +1,6 @@
 <template>
-  <div class="dashboard-container">
+  <el-config-provider :locale="zhCn">
+    <div class="dashboard-container">
     <!-- 主内容 -->
     <div class="main-content">
       <div class="header">
@@ -185,14 +186,16 @@
         </div>
       </div>
     </div>
-  </div>
+    </div>
+  </el-config-provider>
 </template>
 
 <script setup>
 import { ref, onMounted, onUnmounted, computed, nextTick, watch } from 'vue';
 import * as echarts from 'echarts';
 import { Refresh } from '@element-plus/icons-vue';
-import { ElMessage } from 'element-plus';
+import { ElMessage, ElConfigProvider } from 'element-plus';
+import zhCn from 'element-plus/es/locale/lang/zh-cn';
 import api from '../api/client';
 
 // 状态定义
@@ -799,11 +802,14 @@ const updateCharts = () => {
         axisPointer: { type: 'shadow' }
       },
       legend: {
-        data: ['总预算', '实际成本']
+        data: ['总预算', '实际成本'],
+        top: 0,
+        left: 'center'
       },
       grid: {
         left: '3%',
         right: '4%',
+        top: 50,
         bottom: '3%',
         containLabel: true
       },

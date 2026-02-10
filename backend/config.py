@@ -37,6 +37,9 @@ DELIVERY_ENTRY_ID = '7f214b928a8811cfd38e6d2c'
 # 检测项目表
 INSPECTION_ENTRY_ID = '37f8492484812d6cd8781fc8'
 
+# 样品检测交付现场管理表
+INSPECTION_DELIVERY_ENTRY_ID = 'afe94bb78534c3db2ca05e97'
+
 # CORS配置
 CORS_ORIGINS = ['http://localhost:3000', 'http://localhost:8080', 'http://127.0.0.1:5000']
 

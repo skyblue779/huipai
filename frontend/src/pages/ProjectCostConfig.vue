@@ -1,5 +1,6 @@
 ﻿<template>
-  <div class="main-content">
+  <el-config-provider :locale="zhCn">
+    <div class="main-content">
     <!-- <div class="header">
       <div class="header-title">项目阶段配置管理</div>
       <div class="header-actions"></div>
@@ -142,12 +143,14 @@
         </div>
       </div>
     </div>
-  </div>
+    </div>
+  </el-config-provider>
 </template>
 
 <script setup>
 import { ref, reactive, computed, onMounted, nextTick } from 'vue';
-import { ElMessage, ElMessageBox } from 'element-plus';
+import { ElMessage, ElMessageBox, ElConfigProvider } from 'element-plus';
+import zhCn from 'element-plus/es/locale/lang/zh-cn';
 import { Folder, Document, Plus, Delete, Edit } from '@element-plus/icons-vue';
 import api from '../api/client';
 

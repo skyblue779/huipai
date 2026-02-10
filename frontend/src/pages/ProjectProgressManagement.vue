@@ -1,5 +1,6 @@
 <template>
-  <div class="page-root">
+  <el-config-provider :locale="zhCn">
+    <div class="page-root">
     <div class="main-content">
     <div class="page-container">
       <div class="progress-visual-card">
@@ -162,16 +163,22 @@
               </el-tag>
               <span v-else class="stage-placeholder">--</span>
             </template>
-          </el-table-column>
-          <el-table-column label="计划开始日期" width="140" align="center">
+             </el-table-column>
+              <el-table-column label="计划开始日期" width="140" align="center">
+                <template #default="{ row }">
+                  <span v-if="!row.isGroup">{{ row.planEnd }}</span>
+                  <span v-else class="stage-placeholder">--</span>
+                </template>
+              </el-table-column>
+              <el-table-column label="计划结束日期" width="140" align="center">
+                <template #default="{ row }">
+                  <span v-if="!row.isGroup">{{ row.planStart }}</span>
+                  <span v-else class="stage-placeholder">--</span>
+                </template>
+              </el-table-column>
+          <el-table-column label="完成时间" width="140" align="center">
             <template #default="{ row }">
-              <span v-if="!row.isGroup">{{ row.planStart }}</span>
-              <span v-else class="stage-placeholder">--</span>
-            </template>
-          </el-table-column>
-          <el-table-column label="计划结束日期" width="140" align="center">
-            <template #default="{ row }">
-              <span v-if="!row.isGroup">{{ row.planEnd }}</span>
+              <span v-if="!row.isGroup">{{ row.actualFinish }}</span>
               <span v-else class="stage-placeholder">--</span>
             </template>
           </el-table-column>
@@ -202,7 +209,16 @@
 
     <el-dialog v-model="editDialogVisible" title="编辑节点" width="520px">
     <el-form label-width="110px">
-      <el-form-item label="计划开始日期">
+            <el-form-item label="计划开始日期">
+        <el-date-picker
+          v-model="editForm.planEnd"
+          type="date"
+          value-format="YYYY-MM-DD"
+          placeholder="请选择日期"
+          style="width: 100%"
+        />
+      </el-form-item>
+      <el-form-item label="计划结束日期">
         <el-date-picker
           v-model="editForm.planStart"
           type="date"
@@ -236,23 +252,27 @@
       <el-button type="primary" :loading="savingEdit" @click="handleSaveEdit">保存</el-button>
     </template>
     </el-dialog>
-  </div>
+    </div>
+  </el-config-provider>
 </template>
 
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue';
-import { ElMessage } from 'element-plus';
+import { ElMessage, ElConfigProvider } from 'element-plus';
+import zhCn from 'element-plus/es/locale/lang/zh-cn';
 import { Search, Check, WarningFilled, Flag, TrendCharts, Bell } from '@element-plus/icons-vue';
 import api from '../api/client';
 
 const searchQuery = ref('');
 const loading = ref(false);
 const progressRecords = ref([]);
+const orderCache = ref(new Map());
 const currentProjectKey = ref('');
 const editDialogVisible = ref(false);
 const savingEdit = ref(false);
 const editForm = ref({
   planStart: '',
+  planEnd: '',
   executorIds: []
 });
 const editRow = ref(null);
@@ -433,6 +453,24 @@ const compareOrderValue = (a, b) => {
   return String(a).localeCompare(String(b), 'zh');
 };
 
+const getRecordKey = (record) => {
+  if (!record || typeof record !== 'object') return '';
+  return (
+    record._id ||
+    record.id ||
+    record.record_id ||
+    record.recordId ||
+    `${record.project_stage || record.main_stage || ''}-${record.project_stage_order || ''}-${record.main_stage_order || ''}`
+  );
+};
+
+const ensureOrderMap = (projectKey) => {
+  if (!orderCache.value.has(projectKey)) {
+    orderCache.value.set(projectKey, new Map());
+  }
+  return orderCache.value.get(projectKey);
+};
+
 // 按项目分组记录
 const groupedProjects = computed(() => {
   const map = new Map();
@@ -452,7 +490,25 @@ const groupedProjects = computed(() => {
     }
     map.get(key).records.push(item);
   });
-  return Array.from(map.values());
+  const groups = Array.from(map.values());
+  groups.forEach((group) => {
+    const orderMap = ensureOrderMap(group.key);
+    group.records.forEach((record) => {
+      const recordKey = getRecordKey(record);
+      if (!recordKey) return;
+      if (!orderMap.has(recordKey)) {
+        orderMap.set(recordKey, orderMap.size);
+      }
+    });
+    group.records.sort((a, b) => {
+      const aKey = getRecordKey(a);
+      const bKey = getRecordKey(b);
+      const aIndex = orderMap.has(aKey) ? orderMap.get(aKey) : Number.MAX_SAFE_INTEGER;
+      const bIndex = orderMap.has(bKey) ? orderMap.get(bKey) : Number.MAX_SAFE_INTEGER;
+      return aIndex - bIndex;
+    });
+  });
+  return groups;
 });
 
 // 分组变化时同步选中项目
@@ -510,7 +566,8 @@ const projectOptions = computed(() =>
 const normalizeNode = (record, index) => {
   const planRange = parseDateRange(record.plan_time);
   const planStartDate = planRange.start || null;
-  const planEndDate = planRange.end || null;
+  const planEndDate = parseDateValue(record.plan_finishtime) || planRange.end || null;
+  const actualFinishDate = parseDateValue(record.actual_finish) || null;
 
   const mainStageLabel = normalizeLabel(record.main_stage || record.mainStage);
   const projectStageLabel = normalizeLabel(record.project_stage || record.projectStage || record.stage);
@@ -534,6 +591,8 @@ const normalizeNode = (record, index) => {
     planEndRaw: planEndDate,
     planStart: formatDateCell(planStartDate),
     planEnd: formatDateCell(planEndDate),
+    actualFinishRaw: actualFinishDate,
+    actualFinish: formatDateCell(actualFinishDate),
     planStartSort: planStartDate ? planStartDate.getTime() : null,
     originalIndex: index,
     isMilestone: isDone(record.status || '未完成')
@@ -543,16 +602,26 @@ const normalizeNode = (record, index) => {
 // 时间轴节点（按序号/时间排序）
 const timelineNodes = computed(() => {
   const nodes = currentProject.value.records.map((record, index) => normalizeNode(record, index));
-  nodes.sort((a, b) => {
-    const mainCompare = compareOrderValue(a.mainStageOrder, b.mainStageOrder);
-    if (mainCompare !== 0) return mainCompare;
-    const projectCompare = compareOrderValue(a.projectStageOrder, b.projectStageOrder);
-    if (projectCompare !== 0) return projectCompare;
-    const dateCompare = compareOrderValue(a.planStartSort, b.planStartSort);
-    if (dateCompare !== 0) return dateCompare;
-    return a.originalIndex - b.originalIndex;
+  nodes.sort((a, b) => a.originalIndex - b.originalIndex);
+
+  const grouped = new Map();
+  const groupOrder = [];
+  nodes.forEach((node) => {
+    const key = node.mainStageLabel
+      ? `${node.mainStageLabel}||${node.mainStageOrder ?? ''}`
+      : `__single__${node.id}`;
+    if (!grouped.has(key)) {
+      grouped.set(key, []);
+      groupOrder.push(key);
+    }
+    grouped.get(key).push(node);
   });
-  return nodes;
+
+  const ordered = [];
+  groupOrder.forEach((key) => {
+    ordered.push(...(grouped.get(key) || []));
+  });
+  return ordered;
 });
 
 // 表格数据（按主阶段分组）
@@ -700,6 +769,7 @@ const openEditDialog = async (row) => {
   const initialExecutorIds = getExecutorIds(row.executorRaw);
   editForm.value = {
     planStart: row.planStartRaw ? formatDate(row.planStartRaw) : row.planStart || '',
+    planEnd: row.planEndRaw ? formatDate(row.planEndRaw) : row.planEnd || '',
     executorIds: initialExecutorIds
   };
   originalExecutorIds.value = [...initialExecutorIds];
@@ -736,6 +806,9 @@ const handleSaveEdit = async () => {
         editForm.value.planStart,
         editRow.value.planEndRaw
       );
+    }
+    if (editForm.value.planEnd || editRow.value.planEndRaw) {
+      payload.plan_finishtime = editForm.value.planEnd || '';
     }
     const currentExecutorIds = normalizeIdList(editForm.value.executorIds);
     const originalIds = normalizeIdList(originalExecutorIds.value);

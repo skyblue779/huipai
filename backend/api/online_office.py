@@ -17,6 +17,7 @@ from config import (
     PROJECT_BUDGET_ENTRY_ID,
     DELIVERY_ENTRY_ID,
     INSPECTION_ENTRY_ID,
+    INSPECTION_DELIVERY_ENTRY_ID,
     REQUEST_TIMEOUT
 )
 from field_mapping import (
@@ -42,6 +43,12 @@ from field_mapping import (
     DELIVERY_ITEM_REVERSE_EN,
     INSPECTION_FIELDS_EN,
     INSPECTION_REVERSE_EN,
+    INSPECTION_DELIVERY_FIELDS_EN,
+    INSPECTION_DELIVERY_CARGO_FIELDS_EN,
+    INSPECTION_DELIVERY_INSPECTION_FIELDS_EN,
+    INSPECTION_DELIVERY_REVERSE_EN,
+    INSPECTION_DELIVERY_CARGO_REVERSE_EN,
+    INSPECTION_DELIVERY_INSPECTION_REVERSE_EN,
 )
 
 logger = logging.getLogger(__name__)
@@ -579,6 +586,127 @@ class OnlineOfficeAPI:
             FieldMapper.map_from_alias(item, INSPECTION_REVERSE_EN)
             for item in result.get('data', [])
         ]
+
+    # ==================== Inspection delivery operations ====================
+
+    @staticmethod
+    def _map_inspection_delivery_cargo_to_alias(details: Any) -> List[Dict[str, Any]]:
+        if not isinstance(details, list):
+            return []
+        mapped = []
+        for item in details:
+            if isinstance(item, dict):
+                mapped.append(FieldMapper.map_to_alias(item, INSPECTION_DELIVERY_CARGO_FIELDS_EN))
+        return mapped
+
+    @staticmethod
+    def _map_inspection_delivery_cargo_from_alias(details: Any) -> List[Dict[str, Any]]:
+        if not isinstance(details, list):
+            return []
+        mapped = []
+        for item in details:
+            if isinstance(item, dict):
+                mapped.append(FieldMapper.map_from_alias(item, INSPECTION_DELIVERY_CARGO_REVERSE_EN))
+        return mapped
+
+    @staticmethod
+    def _map_inspection_delivery_info_to_alias(details: Any) -> List[Dict[str, Any]]:
+        if not isinstance(details, list):
+            return []
+        mapped = []
+        for item in details:
+            if isinstance(item, dict):
+                mapped.append(FieldMapper.map_to_alias(item, INSPECTION_DELIVERY_INSPECTION_FIELDS_EN))
+        return mapped
+
+    @staticmethod
+    def _map_inspection_delivery_info_from_alias(details: Any) -> List[Dict[str, Any]]:
+        if not isinstance(details, list):
+            return []
+        mapped = []
+        for item in details:
+            if isinstance(item, dict):
+                mapped.append(FieldMapper.map_from_alias(item, INSPECTION_DELIVERY_INSPECTION_REVERSE_EN))
+        return mapped
+
+    def _map_inspection_delivery_from_alias(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        mapped = FieldMapper.map_from_alias(data, INSPECTION_DELIVERY_REVERSE_EN)
+        cargo_key = INSPECTION_DELIVERY_REVERSE_EN.get(INSPECTION_DELIVERY_FIELDS_EN['cargo_items'])
+        if cargo_key and cargo_key in mapped:
+            mapped[cargo_key] = self._map_inspection_delivery_cargo_from_alias(mapped.get(cargo_key))
+        info_key = INSPECTION_DELIVERY_REVERSE_EN.get(INSPECTION_DELIVERY_FIELDS_EN['inspection_info'])
+        if info_key and info_key in mapped:
+            mapped[info_key] = self._map_inspection_delivery_info_from_alias(mapped.get(info_key))
+        return mapped
+
+    def list_inspection_deliveries(
+        self,
+        skip: int = 0,
+        limit: int = 300,
+        filter_obj: Optional[Dict] = None
+    ) -> List[Dict[str, Any]]:
+        url = self._build_url(INSPECTION_DELIVERY_ENTRY_ID, 'data')
+        payload = {
+            'skip': skip,
+            'limit': limit
+        }
+        if filter_obj:
+            payload['filter'] = filter_obj
+        result = self._request('POST', url, json=payload)
+        return [
+            self._map_inspection_delivery_from_alias(item)
+            for item in result.get('data', [])
+        ]
+
+    def get_inspection_delivery(self, data_id: str) -> Dict[str, Any]:
+        url = self._build_url(INSPECTION_DELIVERY_ENTRY_ID, 'data_retrieve')
+        result = self._request('POST', url, json={'data_id': data_id})
+        data = result.get('data', {})
+        return self._map_inspection_delivery_from_alias(data)
+
+    def create_inspection_delivery(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        payload = dict(data)
+        cargo_items = payload.pop('cargo_items', None)
+        inspection_info = payload.pop('inspection_info', None)
+        mapped_data = FieldMapper.map_to_alias(payload, INSPECTION_DELIVERY_FIELDS_EN)
+        if cargo_items is not None:
+            mapped_data[INSPECTION_DELIVERY_FIELDS_EN['cargo_items']] = self._map_inspection_delivery_cargo_to_alias(cargo_items)
+        if inspection_info is not None:
+            mapped_data[INSPECTION_DELIVERY_FIELDS_EN['inspection_info']] = self._map_inspection_delivery_info_to_alias(inspection_info)
+        url = self._build_url(INSPECTION_DELIVERY_ENTRY_ID, 'data_create')
+        result = self._request('POST', url, json={'data': mapped_data})
+        return self._map_inspection_delivery_from_alias(result.get('data', {}))
+
+    def update_inspection_delivery(self, data_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
+        payload = dict(data)
+        cargo_items = payload.pop('cargo_items', None)
+        inspection_info = payload.pop('inspection_info', None)
+        supported_fields = {k: v for k, v in INSPECTION_DELIVERY_FIELDS_EN.items() if k in payload}
+        mapped_data = FieldMapper.map_to_alias(payload, supported_fields)
+        if cargo_items is not None:
+            mapped_data[INSPECTION_DELIVERY_FIELDS_EN['cargo_items']] = self._map_inspection_delivery_cargo_to_alias(cargo_items)
+        if inspection_info is not None:
+            mapped_data[INSPECTION_DELIVERY_FIELDS_EN['inspection_info']] = self._map_inspection_delivery_info_to_alias(inspection_info)
+        url = self._build_url(INSPECTION_DELIVERY_ENTRY_ID, 'data_update')
+        result = self._request('POST', url, json={
+            'data_id': data_id,
+            'data': mapped_data
+        })
+        return self._map_inspection_delivery_from_alias(result.get('data', {}))
+
+    def delete_inspection_delivery(self, data_id: str) -> bool:
+        url = self._build_url(INSPECTION_DELIVERY_ENTRY_ID, 'data_delete')
+        self._request('POST', url, json={
+            'data_id': data_id,
+            'is_start_event': False,
+            'operator': ''
+        })
+        return True
+
+    def upload_inspection_delivery_files(self, files: List[Dict[str, str]]) -> List[Dict[str, Any]]:
+        url = self._build_url(INSPECTION_DELIVERY_ENTRY_ID, 'upload_file')
+        result = self._request('POST', url, json=files)
+        return result.get('data', [])
 
     # ==================== User directory operations ====================
 

@@ -1,5 +1,6 @@
 <template>
-  <div class="project-budget-management">
+  <el-config-provider :locale="zhCn">
+    <div class="project-budget-management">
     <!-- 主内容 -->
     <div class="main-content">
       <div class="header">
@@ -106,8 +107,11 @@
                     </el-table-column>
                     <el-table-column label="执行进度" min-width="200">
                       <template #default="scope">
-                        <el-progress v-if="scope.row.status === 'success'" :percentage="scope.row.percentage" color="#1890ff"></el-progress>
-                        <el-progress v-else :percentage="scope.row.percentage" :status="scope.row.status"></el-progress>
+                        <el-progress
+                          :percentage="scope.row.percentage"
+                          :color="scope.row.progressColor"
+                          :format="() => `${scope.row.displayPercentage}%`"
+                        />
                       </template>
                     </el-table-column>
                     <el-table-column label="状态" width="100" align="center">
@@ -280,13 +284,15 @@
         </el-table>
       </div>
     </el-dialog>
-  </div>
+    </div>
+  </el-config-provider>
 </template>
 
 <script setup>
 import { ref, reactive, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { Plus, Download } from '@element-plus/icons-vue'
-import { ElMessage, ElNotification } from 'element-plus'
+import { ElMessage, ElNotification, ElConfigProvider } from 'element-plus'
+import zhCn from 'element-plus/es/locale/lang/zh-cn'
 import * as echarts from 'echarts'
 import api from '../api/client'
 
@@ -485,15 +491,17 @@ const resolveBudgetStatus = (actual, standard) => (actual > standard ? '超支' 
 const buildStatusMeta = (actual, standard) => {
   if (standard <= 0) {
     if (actual > 0) {
-      return { percentage: 100, status: 'exception', tagType: 'danger', tagName: '超支' }
+      return { percentage: 100, displayPercentage: 100, progressColor: '#f5222d', tagType: 'danger', tagName: '超支' }
     }
-    return { percentage: 0, status: 'success', tagType: 'success', tagName: '正常' }
+    return { percentage: 0, displayPercentage: 0, progressColor: '#1890ff', tagType: 'success', tagName: '正常' }
   }
-  const percentage = Math.min(100, Math.round((actual / standard) * 100))
+  const rawPercentage = Math.round((actual / standard) * 100)
+  const displayPercentage = Math.max(0, rawPercentage)
+  const percentage = Math.min(100, displayPercentage)
   if (actual > standard) {
-    return { percentage, status: 'exception', tagType: 'danger', tagName: '超支' }
+    return { percentage, displayPercentage, progressColor: '#f5222d', tagType: 'danger', tagName: '超支' }
   }
-  return { percentage, status: 'success', tagType: 'success', tagName: '正常' }
+  return { percentage, displayPercentage, progressColor: '#1890ff', tagType: 'success', tagName: '正常' }
 }
 
 // 将原始记录组装成表格分组数据
@@ -570,7 +578,8 @@ const buildBudgetData = (records) => {
         actual: entry.actual,
         diff: entry.actual - entry.standard,
         percentage: statusMeta.percentage,
-        status: statusMeta.status,
+        displayPercentage: statusMeta.displayPercentage,
+        progressColor: statusMeta.progressColor,
         tagType: statusMeta.tagType,
         tagName: statusMeta.tagName,
         _records: entry.records
@@ -586,7 +595,8 @@ const buildBudgetData = (records) => {
       actual: totalActual,
       diff: totalActual - totalStandard,
       percentage: totalStatus.percentage,
-      status: totalStatus.status,
+      displayPercentage: totalStatus.displayPercentage,
+      progressColor: totalStatus.progressColor,
       tagType: totalStatus.tagType,
       tagName: totalStatus.tagName,
       children,

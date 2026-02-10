@@ -84,6 +84,7 @@ PROJECT_PROGRESS_FIELDS_EN = {
     'project_stage_order': '_widget_1769580025051',
     'executor': '_widget_1769239633622',
     'plan_time': '_widget_1769239633640',
+    'plan_finishtime': '_widget_1770709742059',
     'actual_finish': '_widget_1769239633664',
     'status': '_widget_1769239633688',
     'site_upload': '_widget_1769411917447',
@@ -171,6 +172,42 @@ INSPECTION_FIELDS_EN = {
 }
 
 INSPECTION_REVERSE_EN = {v: k for k, v in INSPECTION_FIELDS_EN.items()}
+
+# 样品检测交付现场管理表字段映射 (entry: afe94bb78534c3db2ca05e97)
+INSPECTION_DELIVERY_FIELDS_EN = {
+    'handover_no': '_widget_1770602533864',
+    'delivery_no': '_widget_1770599102686',
+    'project_name': '_widget_1770602533948',
+    'delivery_date': '_widget_1770602534095',
+    'delivery_address': '_widget_1770602534003',
+    'order_no': '_widget_1770602534022',
+    'cargo_items': '_widget_1770602534119',
+    'inspection_info': '_widget_1770602534585',
+    'receiver_customer': '_widget_1770602535438',
+    'handover_date': '_widget_1770602536184',
+    'handover_status': '_widget_1770602535781',
+    'abnormal_reason': '_widget_1770605979585',
+    'remark': '_widget_1770602536376',
+    'handover_person': '_widget_1770602535478',
+}
+
+INSPECTION_DELIVERY_CARGO_FIELDS_EN = {
+    'product_name': '_widget_1770602534167',
+    'spec_model': '_widget_1770602534222',
+    'quantity': '_widget_1770602534279',
+    'unit': '_widget_1770602534330',
+}
+
+INSPECTION_DELIVERY_INSPECTION_FIELDS_EN = {
+    'inspection_project': '_widget_1770602534633',
+    'inspector': '_widget_1770602534862',
+    'inspection_status': '_widget_1770602534786',
+    'description': '_widget_1770602535346',
+}
+
+INSPECTION_DELIVERY_REVERSE_EN = {v: k for k, v in INSPECTION_DELIVERY_FIELDS_EN.items()}
+INSPECTION_DELIVERY_CARGO_REVERSE_EN = {v: k for k, v in INSPECTION_DELIVERY_CARGO_FIELDS_EN.items()}
+INSPECTION_DELIVERY_INSPECTION_REVERSE_EN = {v: k for k, v in INSPECTION_DELIVERY_INSPECTION_FIELDS_EN.items()}
 
 
 class FieldMapper:

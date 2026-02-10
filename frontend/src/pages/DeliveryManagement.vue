@@ -1,12 +1,13 @@
 <template>
-  <div class="dashboard-container">
+  <el-config-provider :locale="zhCn">
+    <div class="dashboard-container">
     <div class="main-content">
       <div class="page-container" v-loading="loading">
         <!-- 顶部筛选栏 -->
         <div class="filter-bar">
           <div class="filter-left">
-            <span class="page-title">发货管理</span>
-            <div class="divider"></div>
+            <!-- <span class="page-title">发货管理</span> -->
+            <!-- <div class="divider"></div> -->
             <!-- 筛选条件组 -->
             <div class="filter-inputs">
               <el-input v-model="filters.deliveryNo" placeholder="发货单号" clearable style="width: 160px;" />
@@ -316,12 +317,14 @@
         </el-dialog>
       </div>
     </div>
-  </div>
+    </div>
+  </el-config-provider>
 </template>
 
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue';
-import { ElMessage, ElMessageBox } from 'element-plus';
+import { ElMessage, ElMessageBox, ElConfigProvider } from 'element-plus';
+import zhCn from 'element-plus/es/locale/lang/zh-cn';
 import { Plus, Delete, Select } from '@element-plus/icons-vue';
 // 假设您有这个 api 文件，保持原样引入
 import api from '../api/client';
@@ -631,7 +634,7 @@ onMounted(() => {
 }
 
 .page-container {
-  padding: 16px;
+  padding: 0px;
   flex: 1;
   overflow-y: auto;
   display: flex;
