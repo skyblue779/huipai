@@ -66,6 +66,7 @@ class OnlineOfficeAPI:
             'Authorization': f'Bearer {API_KEY}',
             'Content-Type': 'application/json'
         })
+        logger.info("OnlineOffice API_KEY: %s", API_KEY)
     
     def _build_url(self, entry_id: str, endpoint: str) -> str:
         """构建API URL"""
@@ -719,6 +720,30 @@ class OnlineOfficeAPI:
         url = f"{self.base_url}/user/user_info"
         result = self._request('POST', url, json={'user_id': user_id})
         return result.get('user', {})
+
+    def send_dingding_message(
+        self,
+        corp_id: str,
+        users: List[str],
+        title: str,
+        content: str,
+        url: str = ''
+    ) -> Dict[str, Any]:
+        """Send DingTalk message to specified users."""
+        payload = {
+            'corp_id': corp_id,
+            'depts': [],
+            'users': users or [],
+            'message': {
+                'title': title,
+                'content': content,
+                'url': url or ''
+            }
+        }
+        logger.info("DingTalk Authorization: %s", self.session.headers.get('Authorization'))
+        logger.info("DingTalk Payload: %s", payload)
+        endpoint = f"{self.base_url}/message/dingding"
+        return self._request('POST', endpoint, json=payload)
 
 # 全局API实例
 api_client = OnlineOfficeAPI()

@@ -55,9 +55,9 @@ def _build_inspection_delivery_payload(delivery: dict) -> dict:
         'order_no': delivery.get('order_no', ''),
         'cargo_items': cargo_items,
         'inspection_info': inspection_info,
-        'handover_date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-        'handover_status': '已签收',
-        'remark': delivery.get('remark', '')
+        'handover_date': '',
+        'handover_status': '待处理',
+        'remark': '',
     }
     return payload
 
@@ -201,8 +201,11 @@ def update_delivery(data_id):
         result = api_client.update_delivery(data_id, data)
         if data.get('status') == '已签收':
             try:
-                delivery_data = result if isinstance(result, dict) and result else api_client.get_delivery(data_id)
+                delivery_data = result if isinstance(result, dict) and result else {}
                 delivery_no = delivery_data.get('delivery_no') if isinstance(delivery_data, dict) else None
+                if not delivery_no:
+                    delivery_data = api_client.get_delivery(data_id)
+                    delivery_no = delivery_data.get('delivery_no') if isinstance(delivery_data, dict) else None
                 if delivery_no:
                     existing = api_client.list_inspection_deliveries(
                         skip=0,

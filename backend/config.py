@@ -13,7 +13,8 @@ DEBUG = os.getenv('DEBUG', True)
 # Online-Office API配置
 ONLINE_OFFICE_BASE_URL = 'https://ahyg.online-office.net/openapi/v1'
 APP_ID = '59e10c88146584ed89e2896b'
-API_KEY = os.getenv('API_KEY', 'mSg84nwyHNdcyye7kx2PB6GCNwdea4pp')
+API_KEY = os.getenv('API_KEY', 'PXd9tk8dFi7uH3Yy7MUZSxZDiWWseGgA')
+DINGDING_CORP_ID = os.getenv('DINGDING_CORP_ID','ding95a80e394156ca1bacaaa37764f94726ddcai4114916469')
 
 # 阶段配置表
 STAGE_CONFIG_ENTRY_ID = '47c64f56ba43e2a6b8654029'

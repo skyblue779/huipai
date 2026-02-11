@@ -8,6 +8,7 @@ import OverallBudgetDashboard from '../pages/OverallBudgetDashboard.vue';
 import ProjectControlDashboard from '../pages/ProjectControlDashboard.vue';
 import DeliveryManagement from '../pages/DeliveryManagement.vue';
 import InspectionDeliveryManagement from '../pages/InspectionDeliveryManagement.vue';
+import InspectionDeliveryMobile from '../pages/InspectionDeliveryMobile.vue';
 
 const routes = [
   {
@@ -58,6 +59,11 @@ const routes = [
     path: '/inspection-delivery-management',
     name: 'InspectionDeliveryManagement',
     component: InspectionDeliveryManagement
+  },
+  {
+    path: '/inspection-delivery-mobile',
+    name: 'InspectionDeliveryMobile',
+    component: InspectionDeliveryMobile
   }
 ];
 

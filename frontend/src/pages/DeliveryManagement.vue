@@ -100,7 +100,7 @@
             </el-table-column>
             <el-table-column prop="logistics_company" label="物流公司" min-width="120" />
             <el-table-column prop="logistics_no" label="物流单号" min-width="140" />
-            <el-table-column label="操作" width="140" align="center" fixed="right">
+            <el-table-column label="操作" width="200" align="center" fixed="right">
               <template #default="scope">
                 <el-button type="primary" link size="small" @click="openDetail(scope.row)">详情</el-button>
                 <el-button
@@ -112,10 +112,39 @@
                 >
                   确认到货
                 </el-button>
+                <el-button
+                  type="danger"
+                  link
+                  size="small"
+                  :disabled="scope.row.status !== '异常'"
+                  @click="openException(scope.row)"
+                >
+                  处理异常
+                </el-button>
               </template>
             </el-table-column>
           </el-table>
         </div>
+
+        <!-- 异常处理弹窗 -->
+        <el-dialog v-model="exceptionDialogVisible" title="异常处理" width="480px" align-center>
+          <el-form :model="exceptionForm" label-width="90px">
+            <el-form-item label="处理状态">
+              <el-select v-model="exceptionForm.status" placeholder="请选择处理状态" style="width: 100%;">
+                <el-option v-for="item in exceptionStatusOptions" :key="item" :label="item" :value="item" />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="备注说明">
+              <el-input v-model="exceptionForm.remark" type="textarea" :rows="3" placeholder="请输入备注" />
+            </el-form-item>
+          </el-form>
+          <template #footer>
+            <div class="dialog-footer">
+              <el-button @click="exceptionDialogVisible = false">取消</el-button>
+              <el-button type="primary" :loading="exceptionLoading" @click="submitException">提交</el-button>
+            </div>
+          </template>
+        </el-dialog>
 
         <!-- 新增弹窗 -->
         <el-dialog v-model="createDialogVisible" title="新增发货" width="800px" align-center>
@@ -333,11 +362,19 @@ const loading = ref(false);
 const records = ref([]);
 const projectOptions = ref([]);
 const inspectionOptions = ref([]);
-const statusOptions = ref(['未发货', '运输中', '已送达', '已签收', '异常']);
+const statusOptions = ref([ '运输中', '已签收', '异常', '退货', '重新发货']);
 const createDialogVisible = ref(false);
 const createLoading = ref(false);
 const detailDialogVisible = ref(false);
 const detailRecord = ref({});
+const exceptionDialogVisible = ref(false);
+const exceptionLoading = ref(false);
+const exceptionForm = reactive({
+  status: '',
+  remark: ''
+});
+const exceptionStatusOptions = ref(['退货', '重新发货']);
+const currentExceptionId = ref('');
 
 const filters = reactive({
   deliveryNo: '',
@@ -371,8 +408,9 @@ const getStatusType = (status) => {
     switch(status) {
         case '已签收': return 'success';
         case '异常': return 'danger';
+        case '退货': return 'primary';
+        case '重新发货': return 'primary';
         case '运输中': return 'primary';
-        case '未发货': return 'info';
         default: return 'warning';
     }
 };
@@ -571,6 +609,48 @@ const handleSign = async (row) => {
       console.error('更新状态失败：', error);
       ElMessage.error('更新状态失败');
     }
+  }
+};
+
+const openException = (row) => {
+  if (!row?._id) {
+    ElMessage.warning('缺少记录ID，无法处理异常');
+    return;
+  }
+  currentExceptionId.value = row._id;
+  exceptionForm.status = '';
+  exceptionForm.remark = row?.remark || '';
+  exceptionDialogVisible.value = true;
+};
+
+const submitException = async () => {
+  if (!currentExceptionId.value) {
+    ElMessage.warning('缺少记录ID，无法提交');
+    return;
+  }
+  if (!exceptionForm.status) {
+    ElMessage.warning('请选择处理状态');
+    return;
+  }
+  exceptionLoading.value = true;
+  try {
+    const payload = {
+      status: exceptionForm.status,
+      remark: exceptionForm.remark || ''
+    };
+    const result = await api.updateDelivery(currentExceptionId.value, payload);
+    if (result?.code === 200) {
+      ElMessage.success('异常处理已更新');
+      exceptionDialogVisible.value = false;
+      loadDeliveries();
+    } else {
+      ElMessage.error(result?.msg || '异常处理失败');
+    }
+  } catch (error) {
+    console.error('异常处理失败：', error);
+    ElMessage.error('异常处理失败');
+  } finally {
+    exceptionLoading.value = false;
   }
 };
 
