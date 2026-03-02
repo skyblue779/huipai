@@ -502,8 +502,7 @@ const normalizeRecord = (record, index) => {
 
   const mainStageLabel = normalizeLabel(record.main_stage || record.mainStage);
   const projectStageLabel = normalizeLabel(record.project_stage || record.projectStage || record.stage);
-  const stageParts = [mainStageLabel, projectStageLabel].filter(Boolean);
-  const stageLabel = stageParts.length ? stageParts.join(' / ') : `阶段${index + 1}`;
+  const stageLabel = mainStageLabel || projectStageLabel || `阶段${index + 1}`;
 
   return {
     recordId: record._id || `${index}`,
@@ -957,6 +956,10 @@ onBeforeUnmount(() => {
   flex-wrap: wrap;
   gap: 16px;
   margin-bottom: 20px;
+  background: #fff;
+  border-radius: 10px;
+  padding: 16px;
+  box-shadow: 0 6px 20px rgba(15, 23, 42, 0.04);
 }
 
 .execution-title {

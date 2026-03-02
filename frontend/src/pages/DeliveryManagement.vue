@@ -22,6 +22,7 @@
             <el-button type="primary" plain @click="loadDeliveries">查询</el-button>
             <el-button @click="resetFilters">重置</el-button>
             <el-button type="primary" @click="openCreateDialog">新增发货</el-button>
+            <el-button plain @click="openPrintTemplateDrawer">打印模板配置</el-button>
           </div>
         </div>
 
@@ -100,9 +101,10 @@
             </el-table-column>
             <el-table-column prop="logistics_company" label="物流公司" min-width="120" />
             <el-table-column prop="logistics_no" label="物流单号" min-width="140" />
-            <el-table-column label="操作" width="200" align="center" fixed="right">
+            <el-table-column label="操作" width="240" align="center" fixed="right">
               <template #default="scope">
                 <el-button type="primary" link size="small" @click="openDetail(scope.row)">详情</el-button>
+                <el-button type="primary" link size="small" @click="printRecord(scope.row)">打印</el-button>
                 <el-button
                   type="primary"
                   link
@@ -112,7 +114,7 @@
                 >
                   确认到货
                 </el-button>
-                <el-button
+                <!-- <el-button
                   type="danger"
                   link
                   size="small"
@@ -120,7 +122,7 @@
                   @click="openException(scope.row)"
                 >
                   处理异常
-                </el-button>
+                </el-button> -->
               </template>
             </el-table-column>
           </el-table>
@@ -185,24 +187,6 @@
               <el-col :span="24">
                 <el-form-item label="收货地址">
                   <el-input v-model="createForm.delivery_address" placeholder="请输入收货地址" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="24">
-                <el-form-item label="检测项目">
-                  <el-select
-                    v-model="createForm.inspection_items"
-                    filterable
-                    multiple
-                    placeholder="请选择检测项目"
-                    style="width: 100%;"
-                  >
-                    <el-option
-                      v-for="item in inspectionOptions"
-                      :key="item.value"
-                      :label="item.label"
-                      :value="item.value"
-                    />
-                  </el-select>
                 </el-form-item>
               </el-col>
               <el-col :span="12">
@@ -297,11 +281,6 @@
                   <el-input :model-value="detailRecord.delivery_address" disabled />
                 </el-form-item>
               </el-col>
-              <el-col :span="24">
-                <el-form-item label="检测项目">
-                  <el-input :model-value="formatList(detailRecord.inspection_items)" disabled />
-                </el-form-item>
-              </el-col>
               <el-col :span="12">
                 <el-form-item label="物流公司">
                   <el-input :model-value="detailRecord.logistics_company" disabled />
@@ -344,6 +323,199 @@
             </div>
           </template>
         </el-dialog>
+
+        <!-- 打印模板侧边栏 -->
+        <el-drawer
+          v-model="printTemplateDrawerVisible"
+          title="打印模板配置"
+          size="520px"
+          direction="rtl"
+        >
+          <div class="print-setting">
+            <div class="print-setting-title">选择打印字段</div>
+            <el-checkbox-group v-model="printTemplateDraft" class="print-setting-group">
+              <el-checkbox v-for="item in printFieldOptions" :key="item.value" :label="item.value">
+                {{ item.label }}
+              </el-checkbox>
+            </el-checkbox-group>
+          </div>
+          <div class="print-preview">
+            <div class="print-preview-title">打印预览</div>
+            <div class="print-preview-scale">
+              <div class="ticket-sheet">
+                <div class="ticket-header">
+                  <div class="ticket-title">发货票据</div>
+                  <div class="ticket-no">票据编号：{{ previewData.delivery_no || '-' }}</div>
+                </div>
+
+                <div class="ticket-meta">
+                  <div class="ticket-row" v-if="hasTemplateField('project_name')">
+                    <span class="ticket-label">项目名称</span>
+                    <span class="ticket-value">{{ previewData.project_name || '-' }}</span>
+                  </div>
+                  <div class="ticket-row" v-if="hasTemplateField('delivery_date')">
+                    <span class="ticket-label">发货日期</span>
+                    <span class="ticket-value">{{ formatDate(previewData.delivery_date) || '-' }}</span>
+                  </div>
+                  <div class="ticket-row" v-if="hasTemplateField('order_no')">
+                    <span class="ticket-label">订单编号</span>
+                    <span class="ticket-value">{{ previewData.order_no || '-' }}</span>
+                  </div>
+                  <div class="ticket-row" v-if="hasTemplateField('logistics')">
+                    <span class="ticket-label">物流公司</span>
+                    <span class="ticket-value">{{ previewData.logistics_company || '-' }}</span>
+                  </div>
+                  <div class="ticket-row" v-if="hasTemplateField('logistics')">
+                    <span class="ticket-label">物流单号</span>
+                    <span class="ticket-value">{{ previewData.logistics_no || '-' }}</span>
+                  </div>
+                  <div class="ticket-row">
+                    <span class="ticket-label">状态</span>
+                    <span class="ticket-value">{{ previewData.status || '-' }}</span>
+                  </div>
+                  <div class="ticket-row ticket-row--full" v-if="hasTemplateField('delivery_address')">
+                    <span class="ticket-label">收货地址</span>
+                    <span class="ticket-value">{{ previewData.delivery_address || '-' }}</span>
+                  </div>
+                </div>
+
+                <div class="ticket-divider"></div>
+
+                <template v-if="hasTemplateField('cargo_items')">
+                  <div class="ticket-section-title">货物明细</div>
+                  <table class="ticket-table">
+                    <thead>
+                      <tr>
+                        <th style="width: 48px;">序号</th>
+                        <th>产品名称</th>
+                        <th>规格型号</th>
+                        <th style="width: 80px;">数量</th>
+                        <th style="width: 80px;">单位</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="(item, index) in normalizeCargo(previewData.cargo_items)" :key="index">
+                        <td class="text-center">{{ index + 1 }}</td>
+                        <td>{{ item.product_name || '-' }}</td>
+                        <td>{{ item.spec_model || '-' }}</td>
+                        <td class="text-right">{{ item.quantity ?? '-' }}</td>
+                        <td class="text-center">{{ item.unit || '-' }}</td>
+                      </tr>
+                      <tr v-if="normalizeCargo(previewData.cargo_items).length === 0">
+                        <td colspan="5" class="text-center">暂无货物明细</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                  <div class="ticket-divider"></div>
+                </template>
+
+                <div class="ticket-footer">
+                  <div class="ticket-footer-row" v-if="hasTemplateField('remark')">
+                    <span class="ticket-label">备注</span>
+                    <span class="ticket-value">{{ previewData.remark || '-' }}</span>
+                  </div>
+                  <div class="ticket-footer-row">
+                    <span class="ticket-label">打印时间</span>
+                    <span class="ticket-value">{{ formatDateTime(previewData.print_time) || '-' }}</span>
+                  </div>
+                  <div class="ticket-sign">
+                    <div>发货人签字：__________</div>
+                    <div>收货人签字：__________</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="drawer-footer">
+            <el-button @click="resetPrintTemplate">恢复默认</el-button>
+            <el-button type="primary" @click="savePrintTemplate">保存模板</el-button>
+          </div>
+        </el-drawer>
+      </div>
+    </div>
+
+    <div id="printSection" class="print-area">
+      <div class="ticket-sheet">
+        <div class="ticket-header">
+          <div class="ticket-title">发货票据</div>
+          <div class="ticket-no">票据编号：{{ printData.delivery_no || '-' }}</div>
+        </div>
+
+        <div class="ticket-meta">
+          <div class="ticket-row" v-if="hasPrintField('project_name')">
+            <span class="ticket-label">项目名称</span>
+            <span class="ticket-value">{{ printData.project_name || '-' }}</span>
+          </div>
+          <div class="ticket-row" v-if="hasPrintField('delivery_date')">
+            <span class="ticket-label">发货日期</span>
+            <span class="ticket-value">{{ formatDate(printData.delivery_date) || '-' }}</span>
+          </div>
+          <div class="ticket-row" v-if="hasPrintField('order_no')">
+            <span class="ticket-label">订单编号</span>
+            <span class="ticket-value">{{ printData.order_no || '-' }}</span>
+          </div>
+          <div class="ticket-row" v-if="hasPrintField('logistics')">
+            <span class="ticket-label">物流公司</span>
+            <span class="ticket-value">{{ printData.logistics_company || '-' }}</span>
+          </div>
+          <div class="ticket-row" v-if="hasPrintField('logistics')">
+            <span class="ticket-label">物流单号</span>
+            <span class="ticket-value">{{ printData.logistics_no || '-' }}</span>
+          </div>
+          <div class="ticket-row">
+            <span class="ticket-label">状态</span>
+            <span class="ticket-value">{{ printData.status || '-' }}</span>
+          </div>
+          <div class="ticket-row ticket-row--full" v-if="hasPrintField('delivery_address')">
+            <span class="ticket-label">收货地址</span>
+            <span class="ticket-value">{{ printData.delivery_address || '-' }}</span>
+          </div>
+        </div>
+
+        <div class="ticket-divider"></div>
+
+        <template v-if="hasPrintField('cargo_items')">
+          <div class="ticket-section-title">货物明细</div>
+          <table class="ticket-table">
+            <thead>
+              <tr>
+                <th style="width: 48px;">序号</th>
+                <th>产品名称</th>
+                <th>规格型号</th>
+                <th style="width: 80px;">数量</th>
+                <th style="width: 80px;">单位</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(item, index) in normalizeCargo(printData.cargo_items)" :key="index">
+                <td class="text-center">{{ index + 1 }}</td>
+                <td>{{ item.product_name || '-' }}</td>
+                <td>{{ item.spec_model || '-' }}</td>
+                <td class="text-right">{{ item.quantity ?? '-' }}</td>
+                <td class="text-center">{{ item.unit || '-' }}</td>
+              </tr>
+              <tr v-if="normalizeCargo(printData.cargo_items).length === 0">
+                <td colspan="5" class="text-center">暂无货物明细</td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="ticket-divider"></div>
+        </template>
+
+        <div class="ticket-footer">
+          <div class="ticket-footer-row" v-if="hasPrintField('remark')">
+            <span class="ticket-label">备注</span>
+            <span class="ticket-value">{{ printData.remark || '-' }}</span>
+          </div>
+          <div class="ticket-footer-row">
+            <span class="ticket-label">打印时间</span>
+            <span class="ticket-value">{{ formatDateTime(printData.print_time) || '-' }}</span>
+          </div>
+          <div class="ticket-sign">
+            <div>发货人签字：__________</div>
+            <div>收货人签字：__________</div>
+          </div>
+        </div>
       </div>
     </div>
     </div>
@@ -351,7 +523,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue';
+import { ref, reactive, computed, onMounted, nextTick } from 'vue';
 import { ElMessage, ElMessageBox, ElConfigProvider } from 'element-plus';
 import zhCn from 'element-plus/es/locale/lang/zh-cn';
 import { Plus, Delete, Select } from '@element-plus/icons-vue';
@@ -361,12 +533,33 @@ import api from '../api/client';
 const loading = ref(false);
 const records = ref([]);
 const projectOptions = ref([]);
-const inspectionOptions = ref([]);
-const statusOptions = ref([ '运输中', '已签收', '异常', '退货', '重新发货']);
+const statusOptions = ref([ '运输中', '已签收']);
 const createDialogVisible = ref(false);
 const createLoading = ref(false);
 const detailDialogVisible = ref(false);
 const detailRecord = ref({});
+const printData = ref({});
+const printTemplateDrawerVisible = ref(false);
+const defaultPrintFields = [
+  'project_name',
+  'delivery_date',
+  'order_no',
+  'delivery_address',
+  'logistics',
+  'remark',
+  'cargo_items'
+];
+const printFields = ref([...defaultPrintFields]);
+const printTemplateDraft = ref([...defaultPrintFields]);
+const printFieldOptions = ref([
+  { label: '项目名称', value: 'project_name' },
+  { label: '发货日期', value: 'delivery_date' },
+  { label: '订单编号', value: 'order_no' },
+  { label: '收货地址', value: 'delivery_address' },
+  { label: '物流信息（物流公司+单号）', value: 'logistics' },
+  { label: '备注', value: 'remark' },
+  { label: '货物明细', value: 'cargo_items' }
+]);
 const exceptionDialogVisible = ref(false);
 const exceptionLoading = ref(false);
 const exceptionForm = reactive({
@@ -430,13 +623,74 @@ const formatDate = (value) => {
   return String(value);
 };
 
-const formatList = (value) => {
-  if (Array.isArray(value)) return value.join('、');
-  if (value === null || value === undefined) return '';
+const formatDateTime = (value) => {
+  if (!value) return '';
+  if (value instanceof Date) {
+    const year = value.getFullYear();
+    const month = String(value.getMonth() + 1).padStart(2, '0');
+    const day = String(value.getDate()).padStart(2, '0');
+    const hour = String(value.getHours()).padStart(2, '0');
+    const minute = String(value.getMinutes()).padStart(2, '0');
+    return `${year}-${month}-${day} ${hour}:${minute}`;
+  }
+  const parsed = new Date(String(value).replace(/-/g, '/'));
+  if (!Number.isNaN(parsed.getTime())) {
+    return formatDateTime(parsed);
+  }
   return String(value);
 };
 
 const normalizeCargo = (items) => (Array.isArray(items) ? items : []);
+const hasPrintField = (key) => printFields.value.includes(key);
+const hasTemplateField = (key) => printTemplateDraft.value.includes(key);
+const printTemplateStorageKey = 'delivery_print_template_fields';
+const previewTime = ref(new Date());
+const previewData = computed(() => {
+  const current = printData.value && Object.keys(printData.value).length > 0
+    ? printData.value
+    : (records.value[0] || {});
+  return { ...(current || {}), print_time: previewTime.value };
+});
+
+const sanitizePrintFields = (fields) => {
+  const allowSet = new Set(printFieldOptions.value.map((item) => item.value));
+  return (Array.isArray(fields) ? fields : []).filter((item) => allowSet.has(item));
+};
+
+const loadPrintTemplate = () => {
+  if (typeof window === 'undefined') return;
+  const cached = window.localStorage.getItem(printTemplateStorageKey);
+  if (!cached) return;
+  try {
+    const parsed = JSON.parse(cached);
+    const sanitized = sanitizePrintFields(parsed);
+    printFields.value = sanitized;
+  } catch (error) {
+    console.warn('读取打印模板配置失败：', error);
+  }
+};
+
+const openPrintTemplateDrawer = () => {
+  printTemplateDraft.value = [...printFields.value];
+  previewTime.value = new Date();
+  printTemplateDrawerVisible.value = true;
+};
+
+const savePrintTemplate = () => {
+  printFields.value = sanitizePrintFields(printTemplateDraft.value);
+  if (typeof window !== 'undefined') {
+    window.localStorage.setItem(
+      printTemplateStorageKey,
+      JSON.stringify(printFields.value)
+    );
+  }
+  ElMessage.success('打印模板已保存');
+  printTemplateDrawerVisible.value = false;
+};
+
+const resetPrintTemplate = () => {
+  printTemplateDraft.value = [...defaultPrintFields];
+};
 
 const buildProjectOptions = (projects) => {
   const map = new Map();
@@ -445,21 +699,6 @@ const buildProjectOptions = (projects) => {
     const name = project?.project_name ? String(project.project_name).trim() : '';
     if (!code && !name) return;
     const label = code ? `${code} - ${name || '未命名项目'}` : (name || '未命名项目');
-    const value = name || label;
-    if (!map.has(value)) {
-      map.set(value, { label, value });
-    }
-  });
-  return Array.from(map.values());
-};
-
-const buildInspectionOptions = (items) => {
-  const map = new Map();
-  items.forEach((item) => {
-    const name = item?.inspection_project ? String(item.inspection_project).trim() : '';
-    const code = item?.inspection_no ? String(item.inspection_no).trim() : '';
-    const label = name || code;
-    if (!label) return;
     const value = name || label;
     if (!map.has(value)) {
       map.set(value, { label, value });
@@ -479,20 +718,6 @@ const loadProjects = async () => {
   } catch (error) {
     console.error('加载项目列表失败：', error);
     projectOptions.value = [];
-  }
-};
-
-const loadInspections = async () => {
-  try {
-    const result = await api.listInspections({ skip: 0, limit: 300 });
-    if (result?.code === 200 && Array.isArray(result.data)) {
-      inspectionOptions.value = buildInspectionOptions(result.data);
-    } else {
-      inspectionOptions.value = [];
-    }
-  } catch (error) {
-    console.error('加载检测项目失败：', error);
-    inspectionOptions.value = [];
   }
 };
 
@@ -528,6 +753,16 @@ const openCreateDialog = () => {
 const openDetail = (row) => {
   detailRecord.value = { ...(row || {}) };
   detailDialogVisible.value = true;
+};
+
+const printRecord = async (row) => {
+  if (!row) {
+    ElMessage.warning('缺少记录，无法打印');
+    return;
+  }
+  printData.value = { ...(row || {}), print_time: new Date() };
+  await nextTick();
+  window.print();
 };
 
 const addCargoItem = () => {
@@ -691,7 +926,7 @@ const resetFilters = () => {
 onMounted(() => {
   loadDeliveries();
   loadProjects();
-  loadInspections();
+  loadPrintTemplate();
 });
 </script>
 
@@ -883,6 +1118,198 @@ onMounted(() => {
 .text-warning { color: #E6A23C; }
 .text-success { color: #67C23A; }
 .text-primary { color: #409EFF; }
+.text-center { text-align: center; }
+.text-right { text-align: right; }
+
+.print-setting {
+  padding: 8px 4px;
+}
+
+.print-setting-title {
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+.print-setting-group {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 12px;
+}
+
+.print-preview {
+  margin-top: 16px;
+  padding: 12px;
+  border: 1px solid #ebeef5;
+  border-radius: 6px;
+  background: #fafafa;
+}
+
+.print-preview-title {
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.print-preview-scale {
+  max-height: 520px;
+  overflow: auto;
+}
+
+.print-preview-scale .ticket-sheet {
+  margin: 0;
+}
+
+@supports (zoom: 1) {
+  .print-preview-scale .ticket-sheet {
+    zoom: 0.68;
+  }
+}
+
+@supports not (zoom: 1) {
+  .print-preview-scale .ticket-sheet {
+    transform: scale(0.68);
+    transform-origin: top left;
+  }
+}
+
+.drawer-footer {
+  margin-top: 16px;
+  padding-top: 12px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  border-top: 1px solid #ebeef5;
+}
+
+.print-area {
+  display: none;
+  background: #fff;
+}
+
+.ticket-sheet {
+  width: 720px;
+  margin: 0 auto;
+  padding: 16px 20px 20px;
+  color: #000;
+  border: 1px solid #000;
+  font-size: 12px;
+  box-sizing: border-box;
+}
+
+.ticket-header {
+  text-align: center;
+  border-bottom: 1px dashed #000;
+  padding-bottom: 10px;
+  margin-bottom: 10px;
+}
+
+.ticket-title {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 6px;
+}
+
+.ticket-no {
+  margin-top: 6px;
+  font-weight: 600;
+}
+
+.ticket-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 16px;
+  margin-bottom: 10px;
+}
+
+.ticket-row {
+  display: flex;
+  gap: 8px;
+  border-bottom: 1px dotted #000;
+  padding-bottom: 2px;
+}
+
+.ticket-row--full {
+  grid-column: 1 / -1;
+}
+
+.ticket-label {
+  width: 72px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.ticket-value {
+  flex: 1;
+  word-break: break-all;
+}
+
+.ticket-divider {
+  border-top: 1px dashed #000;
+  margin: 10px 0;
+}
+
+.ticket-section-title {
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.ticket-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 8px;
+}
+
+.ticket-table th,
+.ticket-table td {
+  border: 1px solid #000;
+  padding: 6px 8px;
+  font-size: 12px;
+}
+
+.ticket-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ticket-footer-row {
+  display: flex;
+  gap: 8px;
+}
+
+.ticket-sign {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 8px;
+}
+
+@media print {
+  :global(body) {
+    margin: 0;
+  }
+  :global(body *) {
+    visibility: hidden;
+  }
+  :global(#printSection),
+  :global(#printSection *) {
+    visibility: visible;
+  }
+  :global(#printSection) {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+  .main-content {
+    display: none !important;
+  }
+  .print-area {
+    display: block !important;
+  }
+  .dashboard-container {
+    background: #fff;
+  }
+}
 
 /* 响应式适配 */
 @media (max-width: 1200px) {

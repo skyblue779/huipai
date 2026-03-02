@@ -37,14 +37,14 @@
           </div>
 
           <div class="status-tags">
-            <el-tag type="info" size="large" effect="plain">非线性节点看板</el-tag>
+            <!-- <el-tag type="info" size="large" effect="plain">非线性节点看板</el-tag> -->
             <el-tag :type="overallProgressType" size="large" effect="dark">
               {{ overallProgress }}% 完成
             </el-tag>
           </div>
         </div>
 
-        <div v-if="timelineNodes.length" class="segmented-timeline-wrapper">
+        <div v-if="timelineMainNodes.length" class="segmented-timeline-wrapper">
 
           <div class="segmented-progress">
             <div class="segmented-progress__fill" :style="{ width: `${overallProgress}%` }"></div>
@@ -52,7 +52,7 @@
 
           <div class="node-markers">
             <div
-              v-for="(node, index) in timelineNodes"
+              v-for="(node, index) in timelineMainNodes"
               :key="`${node.id || 'marker'}-${index}`"
               class="marker-cell"
             >
@@ -663,27 +663,109 @@ const tableRows = computed(() => {
   return rows;
 });
 
+// 仅保留主阶段节点用于进度展示
+const isMainStageNode = (node) => Boolean(node?.mainStageLabel) && !node?.nodeLabel;
+
+const aggregateStatus = (nodes) => {
+  if (nodes.some((node) => node.status === '超期')) return '超期';
+  const allDone =
+    nodes.length > 0 &&
+    nodes.every((node) => node.status === '完成' || node.status === '超期完成');
+  return allDone ? '完成' : '未完成';
+};
+
+const aggregateWarningLevel = (nodes) => {
+  const rank = {
+    '三级预警': 3,
+    '二级预警': 2,
+    '一级预警': 1,
+    正常: 0
+  };
+  let best = '正常';
+  let bestScore = 0;
+  nodes.forEach((node) => {
+    const level = node.warningLevel || '正常';
+    const score = rank[level] ?? 0;
+    if (score > bestScore) {
+      bestScore = score;
+      best = level;
+    }
+  });
+  return best;
+};
+
+const buildAggregatedNode = (group) => {
+  const status = aggregateStatus(group.nodes);
+  const warningLevel = aggregateWarningLevel(group.nodes);
+  const base = group.nodes[0] || {};
+  return {
+    ...base,
+    id: `agg-${group.key}`,
+    name: group.label,
+    mainStageLabel: group.mainStageLabel || group.label,
+    nodeLabel: '',
+    status,
+    warningLevel,
+    isMilestone: status === '完成' || status === '超期完成'
+  };
+};
+
+const timelineMainNodes = computed(() => {
+  const grouped = new Map();
+  const order = [];
+
+  timelineNodes.value.forEach((node, index) => {
+    const key = node.mainStageLabel
+      ? `${node.mainStageLabel}||${node.mainStageOrder ?? ''}`
+      : `__single__${node.id ?? index}`;
+    if (!grouped.has(key)) {
+      grouped.set(key, {
+        key,
+        label: node.mainStageLabel || node.name || `节点${index + 1}`,
+        mainStageLabel: node.mainStageLabel || '',
+        nodes: [],
+        mainNode: null
+      });
+      order.push(key);
+    }
+    const group = grouped.get(key);
+    group.nodes.push(node);
+    if (isMainStageNode(node) && !group.mainNode) {
+      group.mainNode = node;
+    }
+  });
+
+  return order
+    .map((key) => {
+      const group = grouped.get(key);
+      if (!group) return null;
+      if (group.mainNode) return group.mainNode;
+      return buildAggregatedNode(group);
+    })
+    .filter(Boolean);
+});
+
 // 判断节点是否已完成
 const isDone = (status) => status === '完成' || status === '超期完成';
 
 // 计算整体完成进度
 const overallProgress = computed(() => {
-  const total = timelineNodes.value.length;
-  const doneCount = timelineNodes.value.filter((node) => isDone(node.status)).length;
+  const total = timelineMainNodes.value.length;
+  const doneCount = timelineMainNodes.value.filter((node) => isDone(node.status)).length;
   return total === 0 ? 0 : Math.round((doneCount / total) * 100);
 });
 
 // 预警统计
 const totalWarningLevelCount = computed(
-  () => timelineNodes.value.filter((node) => node.status === '超期').length
+  () => timelineMainNodes.value.filter((node) => node.status === '超期').length
 );
 const warningLevelCount = computed(
-  () => timelineNodes.value.filter((node) => node.warningLevel && node.warningLevel !== '正常').length
+  () => timelineMainNodes.value.filter((node) => node.warningLevel && node.warningLevel !== '正常').length
 );
 
 // 里程碑统计
-const milestoneReachedCount = computed(() => timelineNodes.value.filter((node) => isDone(node.status)).length);
-const milestoneTotalCount = computed(() => timelineNodes.value.length);
+const milestoneReachedCount = computed(() => timelineMainNodes.value.filter((node) => isDone(node.status)).length);
+const milestoneTotalCount = computed(() => timelineMainNodes.value.length);
 
 // 进度标签颜色
 const overallProgressType = computed(() => (warningLevelCount.value > 0 ? 'danger' : 'primary'));

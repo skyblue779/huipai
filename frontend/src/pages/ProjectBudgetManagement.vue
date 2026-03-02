@@ -138,26 +138,26 @@
                         <el-table-column prop="amount" label="金额" align="right">
                           <template #default="scope">¥ {{ formatMoney(scope.row.amount) }}</template>
                         </el-table-column>
-                        <el-table-column prop="type" label="类型" width="100">
+                        <!-- <el-table-column prop="type" label="类型" width="100">
                           <template #default="scope">
                             <el-tag size="small" :type="scope.row.isPlan ? 'info' : 'success'">{{ scope.row.isPlan ? '计划' : '实收' }}</el-tag>
                           </template>
-                        </el-table-column>
+                        </el-table-column> -->
                       </el-table>
                     </div>
                     <div style="flex: 1;">
                       <div style="margin-bottom: 10px; font-weight: bold; border-left: 4px solid #E6A23C; padding-left: 10px;">付款记录</div>
                       <el-table :data="payData" border size="small">
                         <el-table-column prop="date" label="日期" width="120"></el-table-column>
-                        <el-table-column prop="item" label="款项内容"></el-table-column>
+                        <el-table-column prop="item" label="成本项"></el-table-column>
                         <el-table-column prop="amount" label="金额" align="right">
                           <template #default="scope">¥ {{ formatMoney(scope.row.amount) }}</template>
                         </el-table-column>
-                        <el-table-column prop="type" label="类型" width="100">
+                        <!-- <el-table-column prop="type" label="类型" width="100">
                           <template #default="scope">
                             <el-tag size="small" :type="scope.row.isPlan ? 'info' : 'warning'">{{ scope.row.isPlan ? '计划' : '实付' }}</el-tag>
                           </template>
-                        </el-table-column>
+                        </el-table-column> -->
                       </el-table>
                     </div>
                   </div>
@@ -205,6 +205,22 @@
           >
             <el-option
               v-for="item in costCenterOptions"
+              :key="item"
+              :label="item"
+              :value="item"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="费用类型">
+          <el-select
+            v-model="entryForm.costType"
+            placeholder="选择费用类型"
+            filterable
+            allow-create
+            default-first-option
+          >
+            <el-option
+              v-for="item in costTypeOptions"
               :key="item"
               :label="item"
               :value="item"
@@ -274,13 +290,14 @@
 
         <div style="margin-bottom: 10px; font-weight: bold; border-left: 4px solid #409EFF; padding-left: 10px;">历史发生记录</div>
         <el-table :data="detailHistoryData" border size="small" style="width: 100%">
-          <el-table-column prop="date" label="发生日期" width="120"></el-table-column>
-          <el-table-column prop="type" label="费用类型" width="100"></el-table-column>
-          <el-table-column prop="amount" label="金额" align="right">
-            <template #default="scope">¥ {{ formatMoney(scope.row.amount) }}</template>
-          </el-table-column>
+        <el-table-column prop="date" label="发生日期" width="120"></el-table-column>
+        <el-table-column prop="costType" label="费用类型" width="120"></el-table-column>
+        <el-table-column prop="type" label="成本项" width="120"></el-table-column>
+        <el-table-column prop="amount" label="金额" align="right">
+          <template #default="scope">¥ {{ formatMoney(scope.row.amount) }}</template>
+        </el-table-column>
           <el-table-column prop="remark" label="备注说明"></el-table-column>
-          <el-table-column prop="operator" label="经办人" width="100"></el-table-column>
+          <!-- <el-table-column prop="operator" label="经办人" width="100"></el-table-column> -->
         </el-table>
       </div>
     </el-dialog>
@@ -311,6 +328,7 @@ const budgetData = ref([])
 
 const entryForm = reactive({
   centerName: '',
+  costType: '',
   costItem: '',
   amount: '',
   remark: ''
@@ -456,6 +474,9 @@ const costItemOptions = computed(() => {
     .map(([item]) => item)
 })
 
+// 费用类型下拉（固定选项）
+const costTypeOptions = ref(['材料费用', '人工费用', '其他费用'])
+
 // 成本中心变化时重置成本项
 watch(
   () => entryForm.centerName,
@@ -514,6 +535,7 @@ const buildBudgetData = (records) => {
     const item = normalizeLabel(record.cost_item) || '未命名'
     const standard = toNumber(record.budget_standard)
     const actual = getRecordActual(record)
+    const costType = normalizeLabel(record.cost_type)
     const mainOrder = normalizeOrderValue(record.main_stage_order)
     const stageOrder = normalizeOrderValue(record.project_stage_order)
 
@@ -528,6 +550,7 @@ const buildBudgetData = (records) => {
         standard: 0,
         actual: 0,
         records: [],
+        costType: '',
         mainOrder,
         stageOrder
       })
@@ -536,6 +559,9 @@ const buildBudgetData = (records) => {
     entry.standard += standard
     entry.actual += actual
     entry.records.push(record)
+    if (!entry.costType && costType) {
+      entry.costType = costType
+    }
     entry.mainOrder = mergeOrderValue(entry.mainOrder, mainOrder)
     entry.stageOrder = mergeOrderValue(entry.stageOrder, stageOrder)
   })
@@ -574,6 +600,7 @@ const buildBudgetData = (records) => {
         id: `item-${rowIndex++}`,
         centerName: '',
         item,
+        costType: entry.costType || '',
         standard: entry.standard,
         actual: entry.actual,
         diff: entry.actual - entry.standard,
@@ -765,6 +792,7 @@ const extractDetailHistory = (records) => {
     details.forEach((detail) => {
       rows.push({
         date: formatDate(detail?.detail_date),
+        costType: record?.cost_type || '',
         type: detail?.detail_item || record.cost_item || '',
         amount: toNumber(detail?.detail_amount),
         remark: detail?.detail_remark || '',
@@ -786,6 +814,7 @@ const handleViewDetails = (row) => {
 // 重置录入表单
 const resetEntryForm = () => {
   entryForm.centerName = ''
+  entryForm.costType = ''
   entryForm.costItem = ''
   entryForm.amount = ''
   entryForm.remark = ''
@@ -799,6 +828,10 @@ const submitEntry = async () => {
   }
   if (!entryForm.centerName) {
     ElMessage.warning('请选择成本中心')
+    return
+  }
+  if (!entryForm.costType) {
+    ElMessage.warning('请选择费用类型')
     return
   }
   if (!entryForm.costItem) {
@@ -840,6 +873,7 @@ const submitEntry = async () => {
       const status = resolveBudgetStatus(newActual, budgetStandard)
       const result = await api.updateProjectBudget(existingRecord._id, {
         actual_total: newActual,
+        cost_type: entryForm.costType,
         cost_details: existingDetails,
         status
       })
@@ -855,6 +889,7 @@ const submitEntry = async () => {
         project_name: currentProjectMeta.value.name || '',
         project_type: currentProjectMeta.value.type || '',
         cost_center: entryForm.centerName,
+        cost_type: entryForm.costType,
         cost_item: entryForm.costItem,
         budget_standard: budgetStandard,
         actual_total: amount,
@@ -903,31 +938,12 @@ const getCenterChartData = () => {
 // 生成成本构成饼图数据
 const getCostPieData = () => {
   const itemRows = budgetData.value.flatMap((row) => row.children || [])
-  let materialCost = 0
-  let laborCost = 0
-  let otherCost = 0
-
-  // 成本项分类汇总
-  const classifyCost = (item, amount) => {
-    const label = item || ''
-    if (label.includes('材料') || label.includes('采购') || label.includes('五金')) {
-      materialCost += amount
-    } else if (label.includes('人工') || label.includes('工资')) {
-      laborCost += amount
-    } else {
-      otherCost += amount
-    }
-  }
-
+  const map = new Map()
   itemRows.forEach((row) => {
-    classifyCost(row.item, toNumber(row.actual))
+    const typeName = row.costType || '未分类'
+    map.set(typeName, (map.get(typeName) || 0) + toNumber(row.actual))
   })
-
-  return [
-    { value: materialCost, name: '材料费用' },
-    { value: laborCost, name: '人工费用' },
-    { value: otherCost, name: '其他费用' }
-  ]
+  return Array.from(map.entries()).map(([name, value]) => ({ name, value }))
 }
 
 // 汇总月度趋势数据
