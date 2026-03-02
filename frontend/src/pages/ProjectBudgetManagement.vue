@@ -496,6 +496,57 @@ const toNumber = (value) => {
   return Number.isFinite(numeric) ? numeric : 0
 }
 
+const COST_TYPE_SUBFORM_VALUE_KEY = '_widget_1772415164746'
+const COST_TYPE_FALLBACK_KEYS = [
+  'cost_type',
+  COST_TYPE_SUBFORM_VALUE_KEY,
+  'type',
+  'name',
+  'label',
+  'value',
+  'text',
+  '费用类型',
+  '成本类型'
+]
+
+const pickCostTypeFromObject = (value) => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return ''
+  for (const key of COST_TYPE_FALLBACK_KEYS) {
+    if (Object.prototype.hasOwnProperty.call(value, key)) {
+      const label = normalizeLabel(value[key])
+      if (label) return label
+    }
+  }
+  const firstKey = Object.keys(value).find((key) => normalizeLabel(value[key]))
+  if (!firstKey) return ''
+  return normalizeLabel(value[firstKey])
+}
+
+const normalizeCostType = (value) => {
+  if (Array.isArray(value)) {
+    const labels = value
+      .map((item) => {
+        if (item === null || item === undefined) return ''
+        if (typeof item === 'object') return pickCostTypeFromObject(item)
+        return normalizeLabel(item)
+      })
+      .filter(Boolean)
+    if (!labels.length) return ''
+    return Array.from(new Set(labels)).join('、')
+  }
+  if (value && typeof value === 'object') {
+    return pickCostTypeFromObject(value)
+  }
+  return normalizeLabel(value)
+}
+
+const getRecordCostType = (record) => {
+  const details = Array.isArray(record?.cost_details) ? record.cost_details : []
+  const detailType = normalizeCostType(details)
+  if (detailType) return detailType
+  return normalizeCostType(record?.cost_type)
+}
+
 // 计算实际成本（总额或明细汇总）
 const getRecordActual = (record) => {
   const actual = toNumber(record?.actual_total)
@@ -535,7 +586,7 @@ const buildBudgetData = (records) => {
     const item = normalizeLabel(record.cost_item) || '未命名'
     const standard = toNumber(record.budget_standard)
     const actual = getRecordActual(record)
-    const costType = normalizeLabel(record.cost_type)
+    const costType = getRecordCostType(record)
     const mainOrder = normalizeOrderValue(record.main_stage_order)
     const stageOrder = normalizeOrderValue(record.project_stage_order)
 
@@ -792,7 +843,7 @@ const extractDetailHistory = (records) => {
     details.forEach((detail) => {
       rows.push({
         date: formatDate(detail?.detail_date),
-        costType: record?.cost_type || '',
+        costType: normalizeCostType(detail?.cost_type) || normalizeCostType(detail?.[COST_TYPE_SUBFORM_VALUE_KEY]) || getRecordCostType(record),
         type: detail?.detail_item || record.cost_item || '',
         amount: toNumber(detail?.detail_amount),
         remark: detail?.detail_remark || '',
@@ -853,7 +904,8 @@ const submitEntry = async () => {
     detail_date: formatDateTime(new Date()),
     detail_item: entryForm.costItem,
     detail_amount: amount,
-    detail_remark: entryForm.remark || ''
+    detail_remark: entryForm.remark || '',
+    cost_type: entryForm.costType
   }
 
   try {
@@ -873,7 +925,6 @@ const submitEntry = async () => {
       const status = resolveBudgetStatus(newActual, budgetStandard)
       const result = await api.updateProjectBudget(existingRecord._id, {
         actual_total: newActual,
-        cost_type: entryForm.costType,
         cost_details: existingDetails,
         status
       })
@@ -889,7 +940,6 @@ const submitEntry = async () => {
         project_name: currentProjectMeta.value.name || '',
         project_type: currentProjectMeta.value.type || '',
         cost_center: entryForm.centerName,
-        cost_type: entryForm.costType,
         cost_item: entryForm.costItem,
         budget_standard: budgetStandard,
         actual_total: amount,
@@ -937,11 +987,25 @@ const getCenterChartData = () => {
 
 // 生成成本构成饼图数据
 const getCostPieData = () => {
-  const itemRows = budgetData.value.flatMap((row) => row.children || [])
   const map = new Map()
-  itemRows.forEach((row) => {
-    const typeName = row.costType || '未分类'
-    map.set(typeName, (map.get(typeName) || 0) + toNumber(row.actual))
+  filteredBudgetRecords.value.forEach((record) => {
+    const details = Array.isArray(record?.cost_details) ? record.cost_details : []
+    if (details.length > 0) {
+      details.forEach((detail) => {
+        const typeName =
+          normalizeCostType(detail?.cost_type) ||
+          normalizeCostType(detail?.[COST_TYPE_SUBFORM_VALUE_KEY]) ||
+          '未分类'
+        const amount = toNumber(detail?.detail_amount)
+        map.set(typeName, (map.get(typeName) || 0) + amount)
+      })
+      return
+    }
+
+    // 没有明细时回退到记录级别，避免历史数据在饼图中丢失
+    const fallbackType = getRecordCostType(record) || '未分类'
+    const fallbackAmount = getRecordActual(record)
+    map.set(fallbackType, (map.get(fallbackType) || 0) + fallbackAmount)
   })
   return Array.from(map.entries()).map(([name, value]) => ({ name, value }))
 }

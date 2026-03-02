@@ -121,7 +121,6 @@ PROJECT_BUDGET_FIELDS_EN = {
     'project_type': '_widget_1770184687725',
     'cost_center': '_widget_1770184687688',
     'cost_item': '_widget_1770184687651',
-    'cost_type': '_widget_1770714371641',
     'main_stage_order': '_widget_1770184687596',
     'project_stage_order': '_widget_1770184687871',
     'status': '_widget_1770184688070',
@@ -136,6 +135,7 @@ PROJECT_BUDGET_DETAIL_FIELDS_EN = {
     'detail_item': '_widget_1770184688732',
     'detail_amount': '_widget_1770184688945',
     'detail_remark': '_widget_1770184688999',
+    'cost_type': '_widget_1772415164746',
 }
 
 PROJECT_BUDGET_REVERSE_EN = {v: k for k, v in PROJECT_BUDGET_FIELDS_EN.items()}

@@ -387,18 +387,57 @@ class OnlineOfficeAPI:
             mapped.append(FieldMapper.map_from_alias(item, PROJECT_BUDGET_DETAIL_REVERSE_EN))
         return mapped
 
+    @staticmethod
+    def _normalize_text(value: Any) -> str:
+        if value is None:
+            return ''
+        return str(value).strip()
+
+    @classmethod
+    def _merge_cost_type_into_budget_details(cls, details: Any, cost_type: Any) -> Any:
+        if not isinstance(details, list):
+            return details
+        cost_type_text = cls._normalize_text(cost_type)
+        if not cost_type_text:
+            return details
+        merged = []
+        for item in details:
+            if not isinstance(item, dict):
+                continue
+            row = dict(item)
+            if not cls._normalize_text(row.get('cost_type')):
+                row['cost_type'] = cost_type_text
+            merged.append(row)
+        return merged
+
+    @classmethod
+    def _extract_cost_type_from_budget_details(cls, details: Any) -> str:
+        if not isinstance(details, list):
+            return ''
+        labels: List[str] = []
+        for item in details:
+            if not isinstance(item, dict):
+                continue
+            text = cls._normalize_text(item.get('cost_type'))
+            if text and text not in labels:
+                labels.append(text)
+        return '、'.join(labels)
+
     def _map_project_budget_from_alias(self, data: Dict[str, Any]) -> Dict[str, Any]:
         mapped = FieldMapper.map_from_alias(data, PROJECT_BUDGET_REVERSE_EN)
         details_key = PROJECT_BUDGET_REVERSE_EN.get(PROJECT_BUDGET_FIELDS_EN['cost_details'])
         if details_key and details_key in mapped:
             mapped[details_key] = self._map_budget_details_from_alias(mapped.get(details_key))
+            mapped['cost_type'] = self._extract_cost_type_from_budget_details(mapped.get(details_key))
         return mapped
 
     def create_project_budget(self, data: Dict[str, Any]) -> Dict[str, Any]:
         payload = dict(data or {})
         details = payload.pop('cost_details', None)
+        cost_type = payload.pop('cost_type', None)
         mapped_data = FieldMapper.map_to_alias(payload, PROJECT_BUDGET_FIELDS_EN)
         if details is not None:
+            details = self._merge_cost_type_into_budget_details(details, cost_type)
             mapped_data[PROJECT_BUDGET_FIELDS_EN['cost_details']] = self._map_budget_details_to_alias(details)
         url = self._build_url(PROJECT_BUDGET_ENTRY_ID, 'data_create')
         result = self._request('POST', url, json={'data': mapped_data})
@@ -436,9 +475,11 @@ class OnlineOfficeAPI:
         details = None
         if 'cost_details' in payload:
             details = payload.pop('cost_details')
+        cost_type = payload.pop('cost_type', None)
         supported_fields = {k: v for k, v in PROJECT_BUDGET_FIELDS_EN.items() if k in payload}
         mapped_data = FieldMapper.map_to_alias(payload, supported_fields)
         if details is not None:
+            details = self._merge_cost_type_into_budget_details(details, cost_type)
             mapped_data[PROJECT_BUDGET_FIELDS_EN['cost_details']] = self._map_budget_details_to_alias(details)
         url = self._build_url(PROJECT_BUDGET_ENTRY_ID, 'data_update')
         result = self._request('POST', url, json={
