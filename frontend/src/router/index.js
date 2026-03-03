@@ -9,11 +9,17 @@ import ProjectControlDashboard from '../pages/ProjectControlDashboard.vue';
 import DeliveryManagement from '../pages/DeliveryManagement.vue';
 import InspectionDeliveryManagement from '../pages/InspectionDeliveryManagement.vue';
 import InspectionDeliveryMobile from '../pages/InspectionDeliveryMobile.vue';
+import Workbench from '../pages/Workbench.vue';
 
 const routes = [
   {
     path: '/',
-    redirect: '/stage-config'
+    redirect: '/workbench'
+  },
+  {
+    path: '/workbench',
+    name: 'Workbench',
+    component: Workbench
   },
   {
     path: '/stage-config',
