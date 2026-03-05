@@ -4,7 +4,7 @@
 from flask import Flask, jsonify, send_from_directory
 from flask_cors import CORS
 import logging
-from config import DEBUG, CORS_ORIGINS, SECRET_KEY, UPLOAD_DIR, PUBLIC_BASE_URL
+from config import DEBUG, CORS_ORIGINS, SECRET_KEY, UPLOAD_DIR, PUBLIC_BASE_URL, API_KEY
 from api.stage_config import stage_bp
 from api.project import project_bp
 from api.project_type import project_type_bp
@@ -31,6 +31,7 @@ def create_app():
     app.config['DEBUG'] = DEBUG
     app.config['UPLOAD_DIR'] = UPLOAD_DIR
     app.config['PUBLIC_BASE_URL'] = PUBLIC_BASE_URL
+    app.config['API_KEY'] = API_KEY
     
     # 启用CORS（开发模式下允许所有来源，避免前端跨域阻塞）
     # 生产环境请根据 CORS_ORIGINS 进行严格配置
@@ -110,12 +111,13 @@ def create_app():
         }), 500
     
     logger.info("Flask 应用创建完成")
+    logger.info("应用配置 API_KEY: %s", app.config.get('API_KEY'))
     return app
 
 
 if __name__ == '__main__':
     app = create_app()
-    app.run(host='172.16.0.66', port=9989, debug=DEBUG)
+    # app.run(host='172.16.0.66', port=9989, debug=DEBUG)
     # 测试环境
-    # app.run(host='127.0.0.1', port=9989)
+    app.run(host='127.0.0.1', port=9989)
     # 生产环境

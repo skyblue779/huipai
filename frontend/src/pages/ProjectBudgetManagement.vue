@@ -32,7 +32,7 @@
             <div class="card-value">¥ {{ formatMoney(summary.totalBudget) }}</div>
             <div class="card-sub">
               <span>含税</span>
-              <el-tag size="small" type="info">V1.2</el-tag>
+              <!-- <el-tag size="small" type="info">V1.2</el-tag> -->
             </div>
           </div>
           <div class="card-box">

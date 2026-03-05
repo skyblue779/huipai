@@ -77,6 +77,46 @@
             </div>
           </div>
 
+          <div class="dashboard-card project-info-card">
+            <div class="card-header">
+              <span class="card-title">项目执行看板</span>
+              <div class="header-right">
+                <div class="status-legend">
+                  <span class="legend-item"><i class="dot red"></i>一级预警</span>
+                  <span class="legend-item"><i class="dot orange"></i>二级预警</span>
+                  <span class="legend-item"><i class="dot green"></i>正常</span>
+                </div>
+                <div class="project-filter-actions">
+                  <el-date-picker
+                    v-model="projectFilterRange"
+                    type="daterange"
+                    value-format="YYYY-MM-DD"
+                    range-separator="至"
+                    start-placeholder="开始日期"
+                    end-placeholder="结束日期"
+                    size="small"
+                    style="width: 260px"
+                  />
+                  <el-button size="small" type="primary" @click="applyProjectFilter">查询</el-button>
+                  <el-button size="small" @click="resetProjectFilter">重置</el-button>
+                </div>
+              </div>
+            </div>
+            <el-table :data="filteredProjectTableData" border stripe>
+              <el-table-column type="index" label="序号" width="60" />
+              <el-table-column prop="name" label="项目名称" min-width="150" />
+              <el-table-column prop="startTime" label="开始时间" width="120" />
+              <el-table-column prop="stage" label="当前阶段" />
+              <el-table-column prop="owner" label="责任人" width="100" />
+              <el-table-column prop="progress" label="进度" width="80" />
+              <el-table-column label="预警状态" width="100">
+                <template #default="{ row }">
+                  <el-tag :type="getTagType(row.warningLevel)">{{ row.warningLevel }}</el-tag>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
+
           <div class="dashboard-grid">
             <div class="dashboard-card main-chart-card">
               <div class="card-header">
@@ -152,32 +192,6 @@
                 </div>
               </div>
             </div>
-
-            <div class="dashboard-card project-info-card">
-              <div class="card-header">
-                <span class="card-title">项目执行看板</span>
-                <div class="header-right">
-                  <div class="status-legend">
-                    <span class="legend-item"><i class="dot red"></i>一级预警</span>
-                    <span class="legend-item"><i class="dot orange"></i>二级预警</span>
-                    <span class="legend-item"><i class="dot green"></i>正常</span>
-                  </div>
-                  <el-date-picker v-model="projectFilterDate" type="month" size="small" style="width: 140px" />
-                </div>
-              </div>
-              <el-table :data="projectTableData" border stripe>
-                <el-table-column type="index" label="序号" width="60" />
-                <el-table-column prop="name" label="项目名称" min-width="150" />
-                <el-table-column prop="stage" label="当前阶段" />
-                <el-table-column prop="owner" label="责任人" width="100" />
-                <el-table-column prop="progress" label="进度" width="80" />
-                <el-table-column label="预警状态" width="100">
-                  <template #default="{ row }">
-                    <el-tag :type="getTagType(row.warningLevel)">{{ row.warningLevel }}</el-tag>
-                  </template>
-                </el-table-column>
-              </el-table>
-            </div>
           </div>
         </div>
       </main>
@@ -203,7 +217,8 @@ const loading = ref(false)
 const currentRole = ref('manager')
 const chartPeriod = ref('week')
 const activeTab = ref('todo')
-const projectFilterDate = ref('')
+const projectFilterRange = ref([])
+const projectQueryRange = ref([])
 
 const roleMap = {
   manager: '总经理/项目经理',
@@ -271,6 +286,8 @@ const PROGRESS_FIELD_KEYS = {
   mainStage: ['main_stage', '_widget_1769239633707'],
   projectStage: ['project_stage', '_widget_1769239633603'],
   executor: ['executor', '_widget_1769239633622'],
+  planTime: ['plan_time', '_widget_1769239633640'],
+  planStart: ['plan_start', 'planStart', '_widget_1769064637850'],
   actualFinish: ['actual_finish', '_widget_1769239633664'],
   status: ['status', '_widget_1769239633688']
 }
@@ -303,6 +320,53 @@ const toNumber = (value) => {
   return Number.isFinite(numeric) ? numeric : 0
 }
 const formatMoney = (val) => toNumber(val).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+const parseDateValue = (value) => {
+  if (!value) return null
+  if (value instanceof Date) return value
+  if (typeof value === 'number') {
+    const date = new Date(value)
+    return Number.isNaN(date.getTime()) ? null : date
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    if (!trimmed) return null
+    const date = new Date(trimmed.replace(/-/g, '/'))
+    return Number.isNaN(date.getTime()) ? null : date
+  }
+  return null
+}
+const parseDateRange = (value) => {
+  if (!value) return { start: null, end: null }
+  if (Array.isArray(value)) {
+    return {
+      start: parseDateValue(value[0]),
+      end: parseDateValue(value[1])
+    }
+  }
+  if (typeof value === 'object') {
+    const start = parseDateValue(value.start || value.begin || value.planStart)
+    const end = parseDateValue(value.end || value.finish || value.planEnd)
+    if (start || end) return { start, end }
+  }
+  if (typeof value === 'string') {
+    const matches = value.match(/\d{4}[-/]\d{1,2}[-/]\d{1,2}(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?/g)
+    if (matches && matches.length >= 2) {
+      return {
+        start: parseDateValue(matches[0]),
+        end: parseDateValue(matches[1])
+      }
+    }
+  }
+  return { start: parseDateValue(value), end: null }
+}
+const formatDateCell = (value) => {
+  const date = parseDateValue(value)
+  if (!date) return '-'
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
 
 const formatExecutor = (value) => {
   if (!value) return ''
@@ -334,6 +398,12 @@ const getProgressProjectName = (record) => normalizeLabel(pickValue(record, PROG
 const getProgressMainStage = (record) => normalizeLabel(pickValue(record, PROGRESS_FIELD_KEYS.mainStage))
 const getProgressProjectStage = (record) => normalizeLabel(pickValue(record, PROGRESS_FIELD_KEYS.projectStage))
 const getProgressExecutor = (record) => pickValue(record, PROGRESS_FIELD_KEYS.executor)
+const getProgressPlanTime = (record) => pickValue(record, PROGRESS_FIELD_KEYS.planTime, null)
+const getProgressStartRaw = (record) => {
+  const range = parseDateRange(getProgressPlanTime(record))
+  if (range.start) return range.start
+  return parseDateValue(pickValue(record, PROGRESS_FIELD_KEYS.planStart, ''))
+}
 const getProgressActualFinish = (record) => normalizeLabel(pickValue(record, PROGRESS_FIELD_KEYS.actualFinish))
 const getProgressStatus = (record) => normalizeStatus(pickValue(record, PROGRESS_FIELD_KEYS.status))
 
@@ -517,6 +587,7 @@ const projectTableData = computed(() => {
   const map = new Map()
   progressRecords.value.forEach((r) => {
     const code = getProgressProjectCode(r) || getProgressProjectName(r) || '未知'
+    const startRaw = getProgressStartRaw(r)
     if (!map.has(code)) {
       map.set(code, {
         name: getProgressProjectName(r) || code,
@@ -524,7 +595,8 @@ const projectTableData = computed(() => {
         done: 0,
         owner: formatExecutor(getProgressExecutor(r)),
         stage: getProgressMainStage(r) || getProgressProjectStage(r),
-        overdue: 0
+        overdue: 0,
+        startRaw
       })
     }
     const item = map.get(code)
@@ -533,6 +605,9 @@ const projectTableData = computed(() => {
     if (getProgressStatus(r) === OVERDUE_PROGRESS_STATUS) item.overdue += 1
     if (!item.owner) item.owner = formatExecutor(getProgressExecutor(r))
     if (!item.stage) item.stage = getProgressMainStage(r) || getProgressProjectStage(r)
+    if (startRaw && (!item.startRaw || startRaw.getTime() < item.startRaw.getTime())) {
+      item.startRaw = startRaw
+    }
   })
 
   // 仅有预算数据时，项目看板也展示基础行，避免工作台为空
@@ -546,7 +621,8 @@ const projectTableData = computed(() => {
         done: 0,
         owner: '-',
         stage: '-',
-        overdue: 0
+        overdue: 0,
+        startRaw: null
       })
     })
   }
@@ -560,6 +636,8 @@ const projectTableData = computed(() => {
     else if (p.overdue === 1) warningLevel = '二级'
     return {
       name: p.name,
+      startRaw: p.startRaw || null,
+      startTime: formatDateCell(p.startRaw),
       stage: p.stage || '-',
       owner: p.owner || '-',
       progress: `${rate}%`,
@@ -568,9 +646,38 @@ const projectTableData = computed(() => {
   })
 })
 
+const filteredProjectTableData = computed(() => {
+  const range = Array.isArray(projectQueryRange.value) ? projectQueryRange.value : []
+  const startDate = parseDateValue(range[0])
+  const endDate = parseDateValue(range[1])
+  if (!startDate && !endDate) return projectTableData.value
+
+  const startTs = startDate
+    ? new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate()).getTime()
+    : null
+  const endTs = endDate
+    ? new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate(), 23, 59, 59, 999).getTime()
+    : null
+
+  return projectTableData.value.filter((item) => {
+    if (!(item.startRaw instanceof Date) || Number.isNaN(item.startRaw.getTime())) return false
+    const time = item.startRaw.getTime()
+    if (startTs !== null && time < startTs) return false
+    if (endTs !== null && time > endTs) return false
+    return true
+  })
+})
+
 const go = (path) => { if (path) router.push(path) }
 const handleRoleChange = (role) => { currentRole.value = role; ElMessage.success(`视角已切换至：${roleMap[role]}`) }
 const getTagType = (level) => (level === '一级' ? 'danger' : level === '二级' ? 'warning' : 'success')
+const applyProjectFilter = () => {
+  projectQueryRange.value = Array.isArray(projectFilterRange.value) ? [...projectFilterRange.value] : []
+}
+const resetProjectFilter = () => {
+  projectFilterRange.value = []
+  projectQueryRange.value = []
+}
 
 const buildTrend = () => {
   const map = new Map()
@@ -761,9 +868,10 @@ watch(chartPeriod, () => initCharts())
 .msg-content p { margin: 0; font-size: 12px; color: #666; }
 .msg-time { font-size: 11px; color: #999; }
 
-.project-info-card { grid-column: span 2; }
-.header-right { display: flex; align-items: center; gap: 20px; }
+.project-info-card { margin-bottom: 20px; }
+.header-right { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; justify-content: flex-end; }
 .status-legend { display: flex; gap: 12px; font-size: 12px; color: #8c8c8c; }
+.project-filter-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .legend-item { display: flex; align-items: center; gap: 4px; }
 .dot { width: 8px; height: 8px; border-radius: 50%; }
 .dot.red { background: #f5222d; }
@@ -773,7 +881,6 @@ watch(chartPeriod, () => initCharts())
 
 @media (max-width: 1200px) {
   .dashboard-grid { grid-template-columns: 1fr; }
-  .project-info-card { grid-column: span 1; }
   .nav-grid { grid-template-columns: repeat(3, 1fr); }
 }
 </style>
