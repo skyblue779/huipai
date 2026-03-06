@@ -540,13 +540,13 @@ onMounted(() => {
 }
 
 .page-container {
-  padding: 16px;
+  padding: 4px 8px;
   flex: 1;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  max-width: 1920px;
+  gap: 12px;
+  max-width: 100%;
   margin: 0 auto;
   width: 100%;
   box-sizing: border-box;

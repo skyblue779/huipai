@@ -1,7 +1,7 @@
 ﻿<template>
   <el-config-provider :locale="zhCn">
     <div class="main-content">
-    <div class="page-container">
+    <div class="page-container1">
       <div class="execution-header">
         <div class="header-left">
           <div class="execution-title">项目执行管理</div>
@@ -954,11 +954,11 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   align-items: center;
   flex-wrap: wrap;
-  gap: 16px;
-  margin-bottom: 20px;
+  gap: 8px;
+  /* margin-bottom: 20px; */
   background: #fff;
-  border-radius: 10px;
-  padding: 16px;
+  /* border-radius: 10px; */
+  padding: 8px;
   box-shadow: 0 6px 20px rgba(15, 23, 42, 0.04);
 }
 
@@ -977,7 +977,7 @@ onBeforeUnmount(() => {
 .execution-actions {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
 }
 
 .user-alert {
@@ -987,8 +987,8 @@ onBeforeUnmount(() => {
 .summary-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
-  margin-bottom: 20px;
+  gap: 8px;
+  /* margin-bottom: 8px; */
 }
 
 .summary-card {
@@ -998,7 +998,7 @@ onBeforeUnmount(() => {
   box-shadow: 0 6px 20px rgba(15, 23, 42, 0.04);
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
 }
 
 .summary-icon {
@@ -1074,7 +1074,7 @@ onBeforeUnmount(() => {
 .project-cell {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 8px;
 }
 
 .project-title {
@@ -1094,7 +1094,7 @@ onBeforeUnmount(() => {
 .mobile-group-list {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 8px;
 }
 
 .mobile-group {
@@ -1124,7 +1124,7 @@ onBeforeUnmount(() => {
 .mobile-card-list {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 8px;
 }
 
 .mobile-card {
@@ -1137,7 +1137,7 @@ onBeforeUnmount(() => {
 .mobile-card-header {
   display: flex;
   justify-content: space-between;
-  gap: 12px;
+  gap: 8px;
   margin-bottom: 12px;
 }
 
@@ -1162,13 +1162,13 @@ onBeforeUnmount(() => {
 .mobile-card-actions {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 10px;
+  gap: 8px;
 }
 
 .detail-body {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 8px;
 }
 
 .detail-attachments {
@@ -1255,3 +1255,4 @@ onBeforeUnmount(() => {
   }
 }
 </style>
+

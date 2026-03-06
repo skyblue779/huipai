@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <el-config-provider :locale="zhCn">
     <div class="app-layout" v-loading="loading">
       <main class="main-content">
@@ -811,18 +811,18 @@ watch(chartPeriod, () => initCharts())
 
 <style scoped>
 .app-layout { min-height: 100vh; background-color: #f0f2f5; color: #333; }
-.main-content { display: flex; flex-direction: column; min-height: 100vh; overflow: hidden; }
-.header { height: 64px; background: #fff; padding: 0 24px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 1px 4px rgba(0, 21, 41, 0.08); z-index: 10; }
+.main-content { display: flex; flex-direction: column; min-height: 100vh; overflow: hidden; width: 100%; }
+.header { height: 64px; background: #fff; padding: 0 8px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 1px 4px rgba(0, 21, 41, 0.08); z-index: 10; }
 .header-title { font-size: 18px; font-weight: 600; }
-.header-actions { display: flex; align-items: center; gap: 20px; }
+.header-actions { display: flex; align-items: center; gap: 8px; }
 .el-dropdown-link { cursor: pointer; display: flex; align-items: center; color: #666; }
-.page-container { padding: 20px; overflow-y: auto; flex: 1; }
+.page-container { padding: 8px 0px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 12px; max-width: 100%; margin: 0 auto; width: 100%; box-sizing: border-box; }
 
-.welcome-banner { background: #fff; padding: 24px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+.welcome-banner { background: #fff; padding: 24px; border-radius: 8px; margin-bottom: 0; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
 .welcome-banner h2 { margin: 0 0 8px; font-size: 20px; }
 .welcome-banner p { color: #666; margin: 0; }
 
-.metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin-bottom: 20px; }
+.metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin-bottom: 0; }
 .metric-card { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
 .metric-header { display: flex; justify-content: space-between; margin-bottom: 12px; }
 .metric-title { color: #8c8c8c; font-size: 14px; }
@@ -834,7 +834,7 @@ watch(chartPeriod, () => initCharts())
 .metric-footer { font-size: 12px; color: #8c8c8c; display: flex; justify-content: space-between; border-top: 1px solid #f0f0f0; padding-top: 12px; }
 .metric-trend { display: flex; align-items: center; }
 
-.quick-nav-card { background: #fff; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
+.quick-nav-card { background: #fff; padding: 20px; border-radius: 8px; margin-bottom: 0; }
 .card-header-simple { display: flex; justify-content: space-between; margin-bottom: 16px; align-items: center; }
 .card-title { font-weight: bold; border-left: 4px solid #1890ff; padding-left: 12px; }
 .nav-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 16px; }
@@ -868,7 +868,7 @@ watch(chartPeriod, () => initCharts())
 .msg-content p { margin: 0; font-size: 12px; color: #666; }
 .msg-time { font-size: 11px; color: #999; }
 
-.project-info-card { margin-bottom: 20px; }
+.project-info-card { margin-bottom: 0; }
 .header-right { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; justify-content: flex-end; }
 .status-legend { display: flex; gap: 12px; font-size: 12px; color: #8c8c8c; }
 .project-filter-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }

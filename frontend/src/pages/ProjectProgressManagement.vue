@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <el-config-provider :locale="zhCn">
     <div class="page-root">
     <div class="main-content">
@@ -935,16 +935,23 @@ onMounted(async () => {
 
 <style scoped>
 .page-container {
-  padding: 32px 40px;
+  padding: 0;
   flex: 1;
   overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 100%;
+  margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .progress-visual-card {
   background: #fff;
   border-radius: 8px;
-  padding: 24px;
-  margin-bottom: 24px;
+  padding: 16px;
+  margin-bottom: 0;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
@@ -952,15 +959,15 @@ onMounted(async () => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 16px;
+  gap: 8px;
   flex-wrap: wrap;
-  margin-bottom: 30px;
+  margin-bottom: 16px;
 }
 
 .search-row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 .project-name-large {
@@ -974,12 +981,12 @@ onMounted(async () => {
 .status-tags {
   display: flex;
   align-items: center;
-  gap: 15px;
+  gap: 8px;
 }
 
 .segmented-timeline-wrapper {
   position: relative;
-  padding: 32px 20px 64px 20px;
+  padding: 24px 16px 48px 16px;
   background: linear-gradient(180deg, #f7f8fb 0%, #ffffff 100%);
   border: 1px solid rgba(60, 60, 67, 0.08);
   border-radius: 16px;
@@ -1087,20 +1094,20 @@ onMounted(async () => {
 }
 
 .empty-timeline {
-  padding: 20px 0;
+  padding: 12px 0;
 }
 
 .dashboard-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 24px;
-  margin-bottom: 24px;
+  gap: 8px;
+  margin-bottom: 0;
 }
 
 .dashboard-card {
   background: #fff;
   border-radius: 8px;
-  padding: 24px;
+  padding: 16px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
@@ -1108,7 +1115,7 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  gap: 12px;
+  gap: 8px;
   margin-bottom: 12px;
 }
 
@@ -1169,23 +1176,23 @@ onMounted(async () => {
 .progress-table-card {
   background: #fff;
   border-radius: 8px;
-  padding: 24px;
+  padding: 16px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
 .table-header {
-  margin-bottom: 20px;
+  margin-bottom: 12px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
 .table-title {
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 8px;
 }
 
 .table-title h3 {
@@ -1239,7 +1246,7 @@ onMounted(async () => {
 
 @media (max-width: 768px) {
   .page-container {
-    padding: 20px;
+    padding: 0;
   }
 
   .dashboard-grid {
@@ -1256,3 +1263,4 @@ onMounted(async () => {
   }
 }
 </style>
+

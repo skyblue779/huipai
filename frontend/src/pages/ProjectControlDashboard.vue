@@ -1,9 +1,9 @@
-<template>
+﻿<template>
   <el-config-provider :locale="zhCn">
     <div class="dashboard-container">
     <div class="main-content">
       <!-- 页面内容容器 -->
-      <div class="page-container" v-loading="loading">
+      <div class="page-container1" v-loading="loading">
         <!-- 顶部筛选栏 (整合了标题) -->
         <div class="filter-bar">
           <div class="filter-left">
@@ -569,14 +569,13 @@ onUnmounted(() => {
 }
 
 .page-container {
-  padding: 16px;
+  padding: 4px 8px;
   flex: 1;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  /* 限制最大宽度，避免在大屏上过宽 */
-  max-width: 1920px;
+  max-width: 100%;
+  gap: 12px;
   margin: 0 auto;
   width: 100%;
   box-sizing: border-box;

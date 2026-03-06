@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <el-config-provider :locale="zhCn">
     <div class="project-budget-management">
     <!-- 主内容 -->
@@ -1161,6 +1161,7 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  width: 100%;
 }
 
 /* 顶部导航 */
@@ -1171,7 +1172,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 24px;
+  padding: 0 8px;
   z-index: 10;
 }
 .header-title {
@@ -1181,19 +1182,23 @@ onUnmounted(() => {
 
 /* 页面内容容器 */
 .page-container {
-  padding: 16px;
+  padding: 8px 4px;
   flex: 1;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 8px;
+  max-width: 100%;
+  margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 /* 概览卡片 */
 .overview-cards {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
-  gap: 16px;
+  gap: 8px;
 }
 .card-box {
   background: #fff;

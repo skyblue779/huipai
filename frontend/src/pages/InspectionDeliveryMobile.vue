@@ -417,7 +417,7 @@ onMounted(() => {
 }
 
 .mobile-header {
-  padding: 16px;
+  padding: 4px 8px;
   background: #fff;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
   display: flex;
@@ -444,7 +444,7 @@ onMounted(() => {
 
 .mobile-body {
   flex: 1;
-  padding: 16px;
+  padding: 4px 8px;
 }
 
 .card-list {
@@ -509,7 +509,7 @@ onMounted(() => {
 }
 
 .mobile-dialog :deep(.el-dialog__body) {
-  padding: 16px;
+  padding: 4px 8px;
 }
 
 .dialog-header {

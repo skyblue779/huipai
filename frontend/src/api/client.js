@@ -1,7 +1,7 @@
-﻿const DEFAULT_BASE_URL = 'http://172.16.0.66:9989'; 
+﻿// const DEFAULT_BASE_URL = 'http://172.16.0.66:9989'; 
 //本地测试
 
-// const DEFAULT_BASE_URL = '/api';  
+const DEFAULT_BASE_URL = '/api';  
 //线上环境
 
 const normalizeBaseUrl = (url) => url.replace(/\/+$/, '');

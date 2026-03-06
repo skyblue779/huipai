@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <el-config-provider :locale="zhCn">
     <div class="dashboard-container">
     <!-- 主内容 -->
@@ -987,7 +987,7 @@ onUnmounted(() => {
 }
 
 .page-container {
-  padding: 8px;
+  padding: 8px 0px;
   flex: 1;
   overflow-y: auto;
   display: flex;
