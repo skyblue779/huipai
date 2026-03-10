@@ -196,9 +196,12 @@
               <span v-else class="stage-placeholder">--</span>
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="120" align="center" fixed="right">
+          <el-table-column label="操作" width="180" align="center" fixed="right">
             <template #default="{ row }">
-              <el-button v-if="!row.isGroup" type="primary" link @click="openEditDialog(row)">编辑</el-button>
+              <div v-if="!row.isGroup" class="action-buttons">
+                <el-button type="primary" link @click="openDetailDialog(row)">查看详情</el-button>
+                <el-button type="primary" link @click="openEditDialog(row)">编辑</el-button>
+              </div>
               <span v-else class="stage-placeholder">--</span>
             </template>
           </el-table-column>
@@ -206,6 +209,87 @@
       </div>
     </div>
   </div>
+
+    <el-dialog v-model="detailDialogVisible" title="节点填报详情" width="720px">
+      <div v-if="detailRow" class="detail-body">
+        <el-descriptions :column="2" border size="small">
+          <el-descriptions-item label="项目名称">{{ detailRow.projectName || '--' }}</el-descriptions-item>
+          <el-descriptions-item label="项目编号">{{ detailRow.projectCode || '--' }}</el-descriptions-item>
+          <el-descriptions-item label="主阶段">{{ detailRow.mainStageLabel || '--' }}</el-descriptions-item>
+          <el-descriptions-item label="节点名称">{{ detailRow.nodeLabel || detailRow.name || '--' }}</el-descriptions-item>
+          <el-descriptions-item label="计划开始日期">{{ detailRow.planStart || '--' }}</el-descriptions-item>
+          <el-descriptions-item label="计划结束日期">{{ detailRow.planEnd || '--' }}</el-descriptions-item>
+          <el-descriptions-item label="完成时间">{{ detailRow.actualFinish || '--' }}</el-descriptions-item>
+          <el-descriptions-item label="当前状态">{{ displayStatus(detailRow.status) }}</el-descriptions-item>
+          <el-descriptions-item label="预警等级">{{ detailRow.warningLevel || '正常' }}</el-descriptions-item>
+          <el-descriptions-item label="责任人">{{ detailRow.executorName || '--' }}</el-descriptions-item>
+          <el-descriptions-item label="执行说明" :span="2">
+            {{ detailRow.executionNote || '--' }}
+          </el-descriptions-item>
+          <el-descriptions-item label="超期原因" :span="2">
+            {{ detailRow.overdueReason || '--' }}
+          </el-descriptions-item>
+        </el-descriptions>
+
+        <div class="detail-attachments">
+          <div class="attachment-label">现场资料</div>
+          <div class="attachment-list">
+            <el-tag v-if="!detailAttachments.length" type="info">暂无附件</el-tag>
+            <div v-else class="attachment-grid">
+              <div
+                v-for="(item, index) in detailAttachments"
+                :key="'detail-attachment-' + index"
+                class="attachment-item"
+              >
+                <div class="attachment-name" :title="item.name">{{ item.name }}</div>
+                <div class="attachment-actions">
+                  <el-button
+                    v-if="item.isImage && item.url"
+                    link
+                    type="primary"
+                    @click="previewAttachmentImage(item)"
+                  >
+                    预览图片
+                  </el-button>
+                  <el-button v-if="item.url" link type="primary" @click="downloadAttachment(item)">
+                    下载
+                  </el-button>
+                  <span v-if="!item.url" class="attachment-text">无可用链接</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <el-empty v-else description="暂无详情数据" />
+      <template #footer>
+        <el-button type="primary" @click="detailDialogVisible = false">关闭</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog
+      v-model="imagePreviewVisible"
+      :title="previewImageTitle"
+      width="820px"
+      top="5vh"
+      append-to-body
+    >
+      <div class="image-preview-body">
+        <el-image
+          v-if="previewImageUrl"
+          :src="previewImageUrl"
+          fit="contain"
+          class="image-preview-main"
+        />
+        <el-empty v-else description="暂无可预览图片" />
+      </div>
+      <template #footer>
+        <el-button @click="imagePreviewVisible = false">关闭</el-button>
+        <el-button type="primary" :disabled="!previewImageUrl" @click="downloadAttachment(previewImageItem)">
+          下载图片
+        </el-button>
+      </template>
+    </el-dialog>
 
     <el-dialog v-model="editDialogVisible" title="编辑节点" width="520px">
     <el-form label-width="110px">
@@ -268,6 +352,10 @@ const loading = ref(false);
 const progressRecords = ref([]);
 const orderCache = ref(new Map());
 const currentProjectKey = ref('');
+const detailDialogVisible = ref(false);
+const detailRow = ref(null);
+const imagePreviewVisible = ref(false);
+const previewImageItem = ref(null);
 const editDialogVisible = ref(false);
 const savingEdit = ref(false);
 const editForm = ref({
@@ -344,17 +432,33 @@ const formatDateCell = (value) => {
   return formatDate(value);
 };
 
+// 去除姓名末尾括号中的账号信息，例如 "张三 (zhangsan)" -> "张三"
+const stripAccountSuffix = (value) => {
+  if (value === null || value === undefined) return '';
+  return String(value)
+    .replace(/\s*[\(（][^()（）]*[\)）]\s*$/g, '')
+    .trim();
+};
+
 // 格式化执行人显示
 const formatUser = (value) => {
   if (!value) return '--';
   if (Array.isArray(value)) {
-    const names = value.map((item) => item?.name || item?._id || item).filter(Boolean);
+    const names = value
+      .map((item) => {
+        if (!item) return '';
+        if (typeof item === 'object') {
+          return stripAccountSuffix(item.name) || String(item._id || item.user_id || item.id || '').trim();
+        }
+        return stripAccountSuffix(item);
+      })
+      .filter(Boolean);
     return names.length ? names.join(' / ') : '--';
   }
   if (typeof value === 'object') {
-    return value.name || value._id || '--';
+    return stripAccountSuffix(value.name) || value._id || '--';
   }
-  return String(value);
+  return stripAccountSuffix(value) || '--';
 };
 
 // 提取执行人 ID 列表
@@ -374,6 +478,74 @@ const getExecutorIds = (value) => {
   }
   return [String(value)];
 };
+
+const IMAGE_EXT_RE = /\.(png|jpe?g|gif|bmp|webp|svg|heic|heif)(?:$|[?#])/i;
+
+const isImageByText = (value) => {
+  if (!value) return false;
+  return IMAGE_EXT_RE.test(String(value).trim());
+};
+
+const isImageAttachment = (name, url, mimeType) => {
+  const normalizedMime = String(mimeType || '').trim().toLowerCase();
+  if (normalizedMime.startsWith('image/')) return true;
+  return isImageByText(name) || isImageByText(url);
+};
+
+const formatAttachment = (item) => {
+  if (!item) return null;
+  if (typeof item === 'string') {
+    const text = item.trim();
+    if (!text) return null;
+    const url = /^https?:\/\//i.test(text) ? text : '';
+    return {
+      name: text,
+      url,
+      isImage: isImageAttachment(text, url, '')
+    };
+  }
+  const name =
+    item.name ||
+    item.file_name ||
+    item.fileName ||
+    item.filename ||
+    item.url ||
+    item.path ||
+    item.id ||
+    item._id ||
+    '';
+  const url = item.url || item.link || item.path || item.download_url || '';
+  const mimeType =
+    item.mime_type ||
+    item.mimeType ||
+    item.content_type ||
+    item.contentType ||
+    item.file_type ||
+    item.fileType ||
+    item.type ||
+    '';
+  const normalizedName = String(name || '').trim();
+  const normalizedUrl = String(url || '').trim();
+  if (!normalizedName && !normalizedUrl) return null;
+  return {
+    name: normalizedName || normalizedUrl,
+    url: normalizedUrl,
+    isImage: isImageAttachment(normalizedName, normalizedUrl, mimeType)
+  };
+};
+
+const normalizeAttachmentList = (value) => {
+  if (!value) return [];
+  if (Array.isArray(value)) {
+    return value.map(formatAttachment).filter(Boolean);
+  }
+  const single = formatAttachment(value);
+  return single ? [single] : [];
+};
+
+const detailAttachments = computed(() => normalizeAttachmentList(detailRow.value?.siteUploadRaw));
+const previewImageTitle = computed(() => previewImageItem.value?.name || '图片预览');
+const previewImageUrl = computed(() => previewImageItem.value?.url || '');
 
 // 更新计划时间字段中的开始日期
 const updatePlanTimeValue = (rawValue, newStart, fallbackEnd) => {
@@ -421,7 +593,7 @@ const normalizeIdList = (ids) =>
 const memberOptions = computed(() =>
   members.value.map((item) => ({
     id: item.user_id,
-    label: `${item.name || '未命名'}${item.account ? ` (${item.account})` : ''}`
+    label: stripAccountSuffix(item.name || '未命名')
   }))
 );
 
@@ -577,6 +749,8 @@ const normalizeNode = (record, index) => {
   return {
     id: record._id || `${index}`,
     recordId: record._id,
+    projectName: normalizeLabel(record.project_name),
+    projectCode: normalizeLabel(record.project_code),
     name: fallbackLabel,
     mainStageLabel,
     nodeLabel,
@@ -586,6 +760,9 @@ const normalizeNode = (record, index) => {
     warningLevel: record.warning_level || '正常',
     executorName: formatUser(record.executor),
     executorRaw: record.executor,
+    executionNote: normalizeLabel(record.execution_note),
+    overdueReason: normalizeLabel(record.overdue_reason),
+    siteUploadRaw: record.site_upload,
     rawPlanTime: record.plan_time,
     planStartRaw: planStartDate,
     planEndRaw: planEndDate,
@@ -842,6 +1019,39 @@ const loadMembers = async () => {
   } finally {
     memberLoading.value = false;
   }
+};
+
+const previewAttachmentImage = (item) => {
+  if (!item?.url || !item?.isImage) {
+    ElMessage.warning('该附件不支持图片预览');
+    return;
+  }
+  previewImageItem.value = item;
+  imagePreviewVisible.value = true;
+};
+
+const downloadAttachment = (item) => {
+  if (!item?.url) {
+    ElMessage.warning('该附件暂无可下载地址');
+    return;
+  }
+  const link = document.createElement('a');
+  link.href = item.url;
+  link.target = '_blank';
+  link.rel = 'noopener noreferrer';
+  link.download = item.name || '附件';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+};
+
+// 打开详情弹窗
+const openDetailDialog = (row) => {
+  if (!row || row.isGroup) return;
+  previewImageItem.value = null;
+  imagePreviewVisible.value = false;
+  detailRow.value = row;
+  detailDialogVisible.value = true;
 };
 
 // 打开编辑弹窗
@@ -1235,6 +1445,85 @@ onMounted(async () => {
 
 .stage-placeholder {
   color: #c0c4cc;
+}
+
+.action-buttons {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.detail-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.detail-attachments {
+  border: 1px solid #ebeef5;
+  border-radius: 6px;
+  padding: 12px;
+}
+
+.attachment-label {
+  font-size: 13px;
+  color: #606266;
+  margin-bottom: 8px;
+}
+
+.attachment-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.attachment-grid {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.attachment-item {
+  border: 1px solid #ebeef5;
+  border-radius: 6px;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: #fff;
+}
+
+.attachment-name {
+  color: #303133;
+  font-size: 13px;
+  line-height: 1.4;
+  word-break: break-all;
+}
+
+.attachment-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.attachment-text {
+  color: #606266;
+}
+
+.image-preview-body {
+  min-height: 220px;
+  max-height: 70vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.image-preview-main {
+  width: 100%;
+  max-height: 68vh;
 }
 
 

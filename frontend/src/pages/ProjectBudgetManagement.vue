@@ -98,14 +98,14 @@
                     <el-table-column prop="actual" label="实际发生" width="150" align="right">
                       <template #default="scope">¥ {{ formatMoney(scope.row.actual) }}</template>
                     </el-table-column>
-                    <el-table-column prop="diff" label="差异金额" width="150" align="right">
+                    <el-table-column prop="diff" label="预算差异" width="150" align="right">
                       <template #default="scope">
                         <span :class="scope.row.diff > 0 ? 'text-danger' : 'text-success'">
                           {{ scope.row.diff > 0 ? '+' : '' }}{{ formatMoney(scope.row.diff) }}
                         </span>
                       </template>
                     </el-table-column>
-                    <el-table-column label="执行进度" min-width="200">
+                    <el-table-column label="预算执行率" min-width="200">
                       <template #default="scope">
                         <el-progress
                           :percentage="scope.row.percentage"

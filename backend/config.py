@@ -12,14 +12,14 @@ DEBUG = os.getenv('DEBUG', True)
 
 # Online-Office API配置
 ONLINE_OFFICE_BASE_URL = 'https://ahyg.online-office.net/openapi/v1'
-# APP_ID = '59e10c88146584ed89e2896b' # 测试环境
-# API_KEY = os.getenv('API_KEY', 'PXd9tk8dFi7uH3Yy7MUZSxZDiWWseGgA')  # 测试环境
-# DINGDING_CORP_ID = os.getenv('DINGDING_CORP_ID','ding95a80e394156ca1bacaaa37764f94726ddcai4114916469') # 测试环境
+APP_ID = '59e10c88146584ed89e2896b' # 测试环境
+API_KEY = os.getenv('API_KEY', 'PXd9tk8dFi7uH3Yy7MUZSxZDiWWseGgA')  # 测试环境
+DINGDING_CORP_ID = os.getenv('DINGDING_CORP_ID','ding95a80e394156ca1bacaaa37764f94726ddcai4114916469') # 测试环境
 
 
-APP_ID = '551d2380cc31e1e2072e2ba2' # 生产环境
-API_KEY = os.getenv('API_KEY', 'YxEXFqMe2bYvpduU7ZRTHzsPvmieUewJ')  # 生产环境
-DINGDING_CORP_ID = os.getenv('DINGDING_CORP_ID','dingf9588aaa893fd0aef2c783f7214b6d69') # 生产环境
+# APP_ID = '551d2380cc31e1e2072e2ba2' # 生产环境
+# API_KEY = os.getenv('API_KEY', 'YxEXFqMe2bYvpduU7ZRTHzsPvmieUewJ')  # 生产环境
+# DINGDING_CORP_ID = os.getenv('DINGDING_CORP_ID','dingf9588aaa893fd0aef2c783f7214b6d69') # 生产环境
 
 # 阶段配置表
 STAGE_CONFIG_ENTRY_ID = '47c64f56ba43e2a6b8654029'
