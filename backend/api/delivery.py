@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 
 delivery_bp = Blueprint('delivery', __name__, url_prefix='/api/delivery')
 
+
 def _normalize_inspection_items(data):
     if not isinstance(data, dict):
         return data
@@ -30,11 +31,28 @@ def _normalize_inspection_items(data):
     return data
 
 
+def _normalize_inspection_item_text(value):
+    if value is None:
+        return ''
+    if isinstance(value, str):
+        return value.strip()
+    if isinstance(value, dict):
+        return str(
+            value.get('inspection_project')
+            or value.get('name')
+            or value.get('label')
+            or value.get('value')
+            or ''
+        ).strip()
+    return str(value).strip()
+
+
 def _build_inspection_delivery_payload(delivery: dict) -> dict:
     cargo_items = delivery.get('cargo_items') if isinstance(delivery.get('cargo_items'), list) else []
     inspection_items = delivery.get('inspection_items')
     if isinstance(inspection_items, list):
-        inspection_list = [item for item in inspection_items if item]
+        inspection_list = [_normalize_inspection_item_text(item) for item in inspection_items]
+        inspection_list = [item for item in inspection_list if item]
     elif isinstance(inspection_items, str) and inspection_items.strip():
         inspection_list = [inspection_items.strip()]
     else:
@@ -60,6 +78,36 @@ def _build_inspection_delivery_payload(delivery: dict) -> dict:
         'remark': '',
     }
     return payload
+
+
+def _sync_inspection_delivery(delivery_data: dict, data_id: str = '') -> None:
+    source = delivery_data if isinstance(delivery_data, dict) else {}
+    delivery_no = str(source.get('delivery_no') or '').strip()
+    if not delivery_no and data_id:
+        fetched = api_client.get_delivery(data_id)
+        if isinstance(fetched, dict):
+            source = fetched
+            delivery_no = str(source.get('delivery_no') or '').strip()
+    if not delivery_no:
+        return
+    existing = api_client.list_inspection_deliveries(
+        skip=0,
+        limit=1,
+        filter_obj={
+            'rel': 'and',
+            'cond': [
+                {
+                    'field': INSPECTION_DELIVERY_FIELDS_EN['delivery_no'],
+                    'method': 'eq',
+                    'value': [delivery_no]
+                }
+            ]
+        }
+    )
+    if existing:
+        return
+    payload = _build_inspection_delivery_payload(source)
+    api_client.create_inspection_delivery(payload)
 
 
 @delivery_bp.route('/list', methods=['GET'])
@@ -174,6 +222,11 @@ def create_delivery():
             }), 400
         data = _normalize_inspection_items(data)
         result = api_client.create_delivery(data)
+        if data.get('status') == '已签收':
+            try:
+                _sync_inspection_delivery(result, str(result.get('_id') or ''))
+            except Exception as exc:
+                logger.error("创建后同步样品检测交付记录失败: %s", exc)
         return jsonify({
             'code': 200,
             'msg': '创建成功',
@@ -201,29 +254,7 @@ def update_delivery(data_id):
         result = api_client.update_delivery(data_id, data)
         if data.get('status') == '已签收':
             try:
-                delivery_data = result if isinstance(result, dict) and result else {}
-                delivery_no = delivery_data.get('delivery_no') if isinstance(delivery_data, dict) else None
-                if not delivery_no:
-                    delivery_data = api_client.get_delivery(data_id)
-                    delivery_no = delivery_data.get('delivery_no') if isinstance(delivery_data, dict) else None
-                if delivery_no:
-                    existing = api_client.list_inspection_deliveries(
-                        skip=0,
-                        limit=1,
-                        filter_obj={
-                            'rel': 'and',
-                            'cond': [
-                                {
-                                    'field': INSPECTION_DELIVERY_FIELDS_EN['delivery_no'],
-                                    'method': 'eq',
-                                    'value': [delivery_no]
-                                }
-                            ]
-                        }
-                    )
-                    if not existing:
-                        payload = _build_inspection_delivery_payload(delivery_data)
-                        api_client.create_inspection_delivery(payload)
+                _sync_inspection_delivery(result, data_id)
             except Exception as exc:
                 logger.error("同步样品检测交付记录失败: %s", exc)
         return jsonify({

@@ -93,6 +93,24 @@
               <template #default="scope">{{ formatDate(scope.row.delivery_date) }}</template>
             </el-table-column>
             <el-table-column prop="order_no" label="订单编号" min-width="140" />
+            <el-table-column label="检测项目" min-width="200" show-overflow-tooltip>
+              <template #default="scope">
+                <div class="inspection-tag-list">
+                  <el-tag
+                    v-for="(item, index) in normalizeInspectionItems(scope.row.inspection_items)"
+                    :key="String(scope.row._id || scope.$index) + '-inspection-' + index"
+                    size="small"
+                    type="info"
+                    effect="plain"
+                  >
+                    {{ item }}
+                  </el-tag>
+                  <span v-if="normalizeInspectionItems(scope.row.inspection_items).length === 0" class="muted-value">
+                    --
+                  </span>
+                </div>
+              </template>
+            </el-table-column>
             <el-table-column prop="delivery_address" label="收货地址" min-width="200" show-overflow-tooltip />
             <el-table-column prop="status" label="状态" width="100">
                <template #default="scope">
@@ -182,6 +200,29 @@
               <el-col :span="12">
                 <el-form-item label="订单编号">
                   <el-input v-model="createForm.order_no" placeholder="请输入订单编号" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="24">
+                <el-form-item label="检测项目">
+                  <el-select
+                    v-model="createForm.inspection_items"
+                    multiple
+                    filterable
+                    allow-create
+                    default-first-option
+                    clearable
+                    collapse-tags
+                    collapse-tags-tooltip
+                    placeholder="请选择或输入检测项目"
+                    style="width: 100%;"
+                  >
+                    <el-option
+                      v-for="item in inspectionOptions"
+                      :key="item"
+                      :label="item"
+                      :value="item"
+                    />
+                  </el-select>
                 </el-form-item>
               </el-col>
               <el-col :span="24">
@@ -277,6 +318,24 @@
                 </el-form-item>
               </el-col>
               <el-col :span="24">
+                <el-form-item label="检测项目">
+                  <div class="inspection-tag-list">
+                    <el-tag
+                      v-for="(item, index) in normalizeInspectionItems(detailRecord.inspection_items)"
+                      :key="'detail-inspection-' + index"
+                      size="small"
+                      type="info"
+                      effect="plain"
+                    >
+                      {{ item }}
+                    </el-tag>
+                    <span v-if="normalizeInspectionItems(detailRecord.inspection_items).length === 0" class="muted-value">
+                      --
+                    </span>
+                  </div>
+                </el-form-item>
+              </el-col>
+              <el-col :span="24">
                 <el-form-item label="收货地址">
                   <el-input :model-value="detailRecord.delivery_address" disabled />
                 </el-form-item>
@@ -360,6 +419,10 @@
                   <div class="ticket-row" v-if="hasTemplateField('order_no')">
                     <span class="ticket-label">订单编号</span>
                     <span class="ticket-value">{{ previewData.order_no || '-' }}</span>
+                  </div>
+                  <div class="ticket-row ticket-row--full" v-if="hasTemplateField('inspection_items')">
+                    <span class="ticket-label">检测项目</span>
+                    <span class="ticket-value">{{ formatInspectionItems(previewData.inspection_items) || '-' }}</span>
                   </div>
                   <div class="ticket-row" v-if="hasTemplateField('logistics')">
                     <span class="ticket-label">物流公司</span>
@@ -454,6 +517,10 @@
             <span class="ticket-label">订单编号</span>
             <span class="ticket-value">{{ printData.order_no || '-' }}</span>
           </div>
+          <div class="ticket-row ticket-row--full" v-if="hasPrintField('inspection_items')">
+            <span class="ticket-label">检测项目</span>
+            <span class="ticket-value">{{ formatInspectionItems(printData.inspection_items) || '-' }}</span>
+          </div>
           <div class="ticket-row" v-if="hasPrintField('logistics')">
             <span class="ticket-label">物流公司</span>
             <span class="ticket-value">{{ printData.logistics_company || '-' }}</span>
@@ -533,6 +600,7 @@ import api from '../api/client';
 const loading = ref(false);
 const records = ref([]);
 const projectOptions = ref([]);
+const inspectionOptions = ref([]);
 const statusOptions = ref([ '运输中', '已签收']);
 const createDialogVisible = ref(false);
 const createLoading = ref(false);
@@ -544,6 +612,7 @@ const defaultPrintFields = [
   'project_name',
   'delivery_date',
   'order_no',
+  'inspection_items',
   'delivery_address',
   'logistics',
   'remark',
@@ -555,6 +624,7 @@ const printFieldOptions = ref([
   { label: '项目名称', value: 'project_name' },
   { label: '发货日期', value: 'delivery_date' },
   { label: '订单编号', value: 'order_no' },
+  { label: '检测项目', value: 'inspection_items' },
   { label: '收货地址', value: 'delivery_address' },
   { label: '物流信息（物流公司+单号）', value: 'logistics' },
   { label: '备注', value: 'remark' },
@@ -641,6 +711,36 @@ const formatDateTime = (value) => {
 };
 
 const normalizeCargo = (items) => (Array.isArray(items) ? items : []);
+const normalizeInspectionItems = (items) => {
+  if (Array.isArray(items)) {
+    return items
+      .map((item) => {
+        if (item === null || item === undefined) return '';
+        if (typeof item === 'string') return item.trim();
+        if (typeof item === 'object') {
+          return String(item.inspection_project || item.name || item.label || item.value || '').trim();
+        }
+        return String(item).trim();
+      })
+      .filter(Boolean);
+  }
+  if (items === null || items === undefined) return [];
+  if (typeof items === 'string') {
+    const value = items.trim();
+    if (!value) return [];
+    return value
+      .split(/[，,、;；\n]+/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+  if (typeof items === 'object') {
+    const value = String(items.inspection_project || items.name || items.label || items.value || '').trim();
+    return value ? [value] : [];
+  }
+  const fallback = String(items).trim();
+  return fallback ? [fallback] : [];
+};
+const formatInspectionItems = (items) => normalizeInspectionItems(items).join('、');
 const hasPrintField = (key) => printFields.value.includes(key);
 const hasTemplateField = (key) => printTemplateDraft.value.includes(key);
 const printTemplateStorageKey = 'delivery_print_template_fields';
@@ -721,6 +821,29 @@ const loadProjects = async () => {
   }
 };
 
+const buildInspectionOptions = (inspections) => {
+  const set = new Set();
+  (Array.isArray(inspections) ? inspections : []).forEach((item) => {
+    const name = String(item?.inspection_project || '').trim();
+    if (name) set.add(name);
+  });
+  return Array.from(set.values());
+};
+
+const loadInspections = async () => {
+  try {
+    const result = await api.listInspections({ skip: 0, limit: 300 });
+    if (result?.code === 200 && Array.isArray(result.data)) {
+      inspectionOptions.value = buildInspectionOptions(result.data);
+    } else {
+      inspectionOptions.value = [];
+    }
+  } catch (error) {
+    console.error('加载检测项目失败：', error);
+    inspectionOptions.value = [];
+  }
+};
+
 const kpiStats = computed(() => {
   const total = records.value.length;
   const pending = records.value.filter((item) => item.status === '运输中').length;
@@ -751,7 +874,10 @@ const openCreateDialog = () => {
 };
 
 const openDetail = (row) => {
-  detailRecord.value = { ...(row || {}) };
+  detailRecord.value = {
+    ...(row || {}),
+    inspection_items: normalizeInspectionItems(row?.inspection_items)
+  };
   detailDialogVisible.value = true;
 };
 
@@ -760,7 +886,11 @@ const printRecord = async (row) => {
     ElMessage.warning('缺少记录，无法打印');
     return;
   }
-  printData.value = { ...(row || {}), print_time: new Date() };
+  printData.value = {
+    ...(row || {}),
+    inspection_items: normalizeInspectionItems(row?.inspection_items),
+    print_time: new Date()
+  };
   await nextTick();
   window.print();
 };
@@ -795,9 +925,7 @@ const submitCreate = async () => {
   }
   createLoading.value = true;
   try {
-    const inspectionItems = Array.isArray(createForm.inspection_items)
-      ? createForm.inspection_items
-      : (createForm.inspection_items ? [createForm.inspection_items] : []);
+    const inspectionItems = Array.from(new Set(normalizeInspectionItems(createForm.inspection_items)));
     const payload = {
       ...createForm,
       inspection_items: inspectionItems,
@@ -901,7 +1029,10 @@ const loadDeliveries = async () => {
       status: filters.status
     });
     if (result?.code === 200 && Array.isArray(result.data)) {
-      records.value = result.data;
+      records.value = result.data.map((item) => ({
+        ...(item || {}),
+        inspection_items: normalizeInspectionItems(item?.inspection_items)
+      }));
     } else {
       records.value = [];
       ElMessage.error(result?.msg || '加载发货数据失败');
@@ -926,6 +1057,7 @@ const resetFilters = () => {
 onMounted(() => {
   loadDeliveries();
   loadProjects();
+  loadInspections();
   loadPrintTemplate();
 });
 </script>
@@ -1120,6 +1252,17 @@ onMounted(() => {
 .text-primary { color: #409EFF; }
 .text-center { text-align: center; }
 .text-right { text-align: right; }
+
+.inspection-tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 22px;
+}
+
+.muted-value {
+  color: #909399;
+}
 
 .print-setting {
   padding: 8px 4px;

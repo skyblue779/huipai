@@ -221,8 +221,16 @@
       :fullscreen="isMobile"
       :class="{ 'mobile-dialog': isMobile }"
     >
+        <el-alert
+          v-if="submitNeedsOverdueReport"
+          class="submit-overdue-alert"
+          type="warning"
+          show-icon
+          :closable="false"
+          title="当前节点已超期，请先提交超期原因并更新为“超期”，后续再补充执行完成。"
+        />
         <el-form :label-width="isMobile ? '90px' : '110px'">
-          <el-form-item label="实际完成时间">
+          <el-form-item v-if="!submitNeedsOverdueReport" label="实际完成时间">
             <el-date-picker
             v-model="submitForm.actualFinish"
             type="date"
@@ -231,7 +239,7 @@
             style="width: 100%"
           />
         </el-form-item>
-        <el-form-item label="现场资料上传">
+        <el-form-item v-if="!submitNeedsOverdueReport" label="现场资料上传">
           <el-upload
             :file-list="uploadFileList"
             action="#"
@@ -251,7 +259,7 @@
             </template>
           </el-upload>
         </el-form-item>
-        <el-form-item label="执行情况说明">
+        <el-form-item v-if="!submitNeedsOverdueReport" label="执行情况说明">
           <el-input
             v-model="submitForm.executionNote"
             type="textarea"
@@ -259,18 +267,18 @@
             placeholder="请输入执行情况说明"
           />
         </el-form-item>
-        <el-form-item v-if="submitIsOverdue" label="超期原因">
+        <el-form-item v-if="submitNeedOverdueReason" label="超期原因">
           <el-input
             v-model="submitForm.overdueReason"
             type="textarea"
             :rows="3"
-            placeholder="请输入超期原因"
+            placeholder="项目已超期，请填写超期原因"
           />
         </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="submitDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="handleSubmit">确认提交</el-button>
+        <el-button type="primary" :loading="submitting" @click="handleSubmit">{{ submitConfirmText }}</el-button>
       </template>
     </el-dialog>
     </div>
@@ -493,7 +501,7 @@ const normalizeLabel = (value) => {
 const normalizeRecord = (record, index) => {
   const planRange = parseDateRange(record.plan_time);
   const planStartDate = planRange.start || null;
-  const planEndDate = planRange.end || null;
+  const planEndDate = parseDateValue(record.plan_finishtime) || planRange.end || null;
   const actualFinishDate = parseDateValue(record.actual_finish);
 
   const projectName = normalizeLabel(record.project_name) || '未命名项目';
@@ -719,16 +727,47 @@ const openSubmitDialog = (row) => {
   submitDialogVisible.value = true;
 };
 
-// 判断当前提交是否超期
-const submitIsOverdue = computed(() => {
+// 判断记录是否已超期（按当前时间）
+const isRowOverdueByNow = (row) => {
+  if (!row) return false;
+  if (row.status === '超期') return true;
+  const planEnd = row.planEndRaw;
+  if (!(planEnd instanceof Date) || Number.isNaN(planEnd.getTime())) return false;
+  return new Date().getTime() > planEnd.getTime();
+};
+
+const hasOverdueReason = (row) => Boolean((row?.overdueReason || '').toString().trim());
+
+// 超期流程第一步：先提交超期原因并将状态改为“超期”
+const submitNeedsOverdueReport = computed(() => {
   if (!submitRow.value) return false;
-  if (submitRow.value.status === '超期') return true;
-  const planEnd = submitRow.value.planEndRaw;
-  if (!planEnd) return false;
-  const actualDate = parseDateValue(submitForm.value.actualFinish);
-  const checkDate = actualDate || new Date();
-  return checkDate.getTime() > planEnd.getTime();
+  if (isDone(submitRow.value.status)) return false;
+  if (submitRow.value.status === '超期') {
+    return !hasOverdueReason(submitRow.value);
+  }
+  return isRowOverdueByNow(submitRow.value);
 });
+
+// 当前提交是否需要填写超期原因
+const submitNeedOverdueReason = computed(() => {
+  if (!submitRow.value) return false;
+  if (submitNeedsOverdueReport.value) return true;
+  if (submitRow.value.status === '超期') return true;
+  return false;
+});
+
+// 按提交时间判定是否超期完成（决定最终状态）
+const submitWillBeOverdue = computed(() => {
+  if (!submitRow.value) return false;
+  if (submitNeedsOverdueReport.value || submitRow.value.status === '超期') return true;
+  const planEnd = submitRow.value.planEndRaw;
+  if (!(planEnd instanceof Date) || Number.isNaN(planEnd.getTime())) return false;
+  const actualDate = parseDateValue(submitForm.value.actualFinish);
+  if (!actualDate) return false;
+  return actualDate.getTime() > planEnd.getTime();
+});
+
+const submitConfirmText = computed(() => (submitNeedsOverdueReport.value ? '提交超期原因' : '确认提交'));
 
 // 统一附件名称展示
 const formatAttachmentName = (item) => {
@@ -794,24 +833,41 @@ const handleSubmit = async () => {
     ElMessage.error('无法提交：缺少记录ID');
     return;
   }
-  if (!submitForm.value.actualFinish) {
-    ElMessage.warning('请选择实际完成时间');
+  if (submitNeedOverdueReason.value && !submitForm.value.overdueReason.trim()) {
+    ElMessage.warning('请填写超期原因');
     return;
   }
-  if (submitIsOverdue.value && !submitForm.value.overdueReason.trim()) {
-    ElMessage.warning('请填写超期原因');
+  if (!submitNeedsOverdueReport.value && !submitForm.value.actualFinish) {
+    ElMessage.warning('请选择实际完成时间');
     return;
   }
 
   submitting.value = true;
   try {
+    if (submitNeedsOverdueReport.value) {
+      const overdueReason = submitForm.value.overdueReason.trim();
+      const reportPayload = {
+        status: '超期',
+        overdue_reason: overdueReason
+      };
+      const reportResult = await api.updateProjectProgress(submitRow.value.recordId, reportPayload);
+      if (reportResult?.code === 200) {
+        ElMessage.success('超期原因已提交，状态已更新为超期');
+        submitDialogVisible.value = false;
+        await loadProgressRecords();
+      } else {
+        ElMessage.error(reportResult?.msg || '提交超期原因失败');
+      }
+      return;
+    }
+
     const payload = {
       actual_finish: submitForm.value.actualFinish,
       execution_note: submitForm.value.executionNote
     };
 
-    if (submitIsOverdue.value) {
-      payload.overdue_reason = submitForm.value.overdueReason;
+    if (submitNeedOverdueReason.value) {
+      payload.overdue_reason = submitForm.value.overdueReason.trim();
     }
 
     if (uploadFileList.value.length) {
@@ -820,7 +876,7 @@ const handleSubmit = async () => {
     }
 
     if (!isDone(submitRow.value.status)) {
-      payload.status = submitIsOverdue.value ? '超期完成' : '完成';
+      payload.status = submitWillBeOverdue.value ? '超期完成' : '完成';
     }
 
     if (Object.keys(payload).length === 0) {
@@ -1191,6 +1247,10 @@ onBeforeUnmount(() => {
 
 .attachment-item {
   max-width: 240px;
+}
+
+.submit-overdue-alert {
+  margin-bottom: 12px;
 }
 
 .upload-icon {
