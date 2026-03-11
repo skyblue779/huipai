@@ -78,6 +78,8 @@ PROJECT_PROGRESS_FIELDS_EN = {
     'project_code': '_widget_1769239633492',
     'project_name': '_widget_1769239633511',
     'project_type': '_widget_1769239633530',
+    'batch_no': '_widget_1773215417774',
+    'batch_name': '_widget_1773215417815',
     'main_stage': '_widget_1769239633707',
     'main_stage_order': '_widget_1769580025032',
     'project_stage': '_widget_1769239633603',

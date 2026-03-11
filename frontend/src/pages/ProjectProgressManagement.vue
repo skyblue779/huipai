@@ -129,6 +129,26 @@
           <div class="table-title">
             <h3>项目节点执行明细</h3>
           </div>
+          <div class="table-actions">
+            <el-button
+              type="primary"
+              plain
+              size="small"
+              :disabled="!currentBatchCard"
+              @click="openEditBatchDialog"
+            >
+              编辑批次
+            </el-button>
+            <el-button
+              type="primary"
+              plain
+              size="small"
+              :disabled="!batchTemplateRecords.length"
+              @click="openCreateBatchDialog"
+            >
+              新增批次
+            </el-button>
+          </div>
         </div>
 
         <el-table
@@ -154,6 +174,12 @@
                 <span class="stage-node-dot"></span>
                 <span class="stage-node-text">{{ row.nodeLabel || row.name }}</span>
               </div>
+            </template>
+          </el-table-column>
+          <el-table-column label="批次" width="200" align="center">
+            <template #default="{ row }">
+              <span v-if="!row.isGroup">{{ row.batchCardLabel }}</span>
+              <span v-else class="stage-placeholder">--</span>
             </template>
           </el-table-column>
           <el-table-column label="当前状态" width="120" align="center">
@@ -206,6 +232,26 @@
             </template>
           </el-table-column>
           </el-table>
+
+        <div v-if="batchCards.length" class="batch-card-panel">
+          <div class="batch-card-header">
+            <div class="batch-card-title">批次列表</div>
+            <div class="batch-card-desc">点击卡片查看对应批次</div>
+          </div>
+          <div class="batch-card-grid">
+            <button
+              v-for="card in batchCards"
+              :key="card.key"
+              type="button"
+              class="batch-card-item"
+              :class="{ 'is-active': card.key === currentBatchKey }"
+              @click="handleBatchCardClick(card.key)"
+            >
+              <div class="batch-card-main">{{ card.label }}</div>
+              <div class="batch-card-sub">{{ card.subLabel }}</div>
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -217,6 +263,8 @@
           <el-descriptions-item label="项目编号">{{ detailRow.projectCode || '--' }}</el-descriptions-item>
           <el-descriptions-item label="主阶段">{{ detailRow.mainStageLabel || '--' }}</el-descriptions-item>
           <el-descriptions-item label="节点名称">{{ detailRow.nodeLabel || detailRow.name || '--' }}</el-descriptions-item>
+          <el-descriptions-item label="批次编号">{{ detailRow.batchNo || '--' }}</el-descriptions-item>
+          <el-descriptions-item label="批次名称">{{ detailRow.batchName || '--' }}</el-descriptions-item>
           <el-descriptions-item label="计划开始日期">{{ detailRow.planStart || '--' }}</el-descriptions-item>
           <el-descriptions-item label="计划结束日期">{{ detailRow.planEnd || '--' }}</el-descriptions-item>
           <el-descriptions-item label="完成时间">{{ detailRow.actualFinish || '--' }}</el-descriptions-item>
@@ -336,6 +384,62 @@
       <el-button type="primary" :loading="savingEdit" @click="handleSaveEdit">保存</el-button>
     </template>
     </el-dialog>
+
+    <el-dialog v-model="createBatchDialogVisible" title="新增批次" width="460px">
+      <el-form label-width="96px">
+        <el-form-item label="批次编号">
+          <el-input-number
+            v-model="createBatchForm.batchNo"
+            :min="1"
+            :step="1"
+            :precision="0"
+            controls-position="right"
+            style="width: 100%"
+            placeholder="请输入批次编号"
+          />
+        </el-form-item>
+        <el-form-item label="批次名称">
+          <el-input
+            v-model="createBatchForm.batchName"
+            maxlength="40"
+            show-word-limit
+            placeholder="请输入批次名称"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="createBatchDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="creatingBatch" @click="handleCreateBatch">确定新增</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="editBatchDialogVisible" title="编辑批次" width="460px">
+      <el-form label-width="96px">
+        <el-form-item label="批次编号">
+          <el-input-number
+            v-model="editBatchForm.batchNo"
+            :min="1"
+            :step="1"
+            :precision="0"
+            controls-position="right"
+            style="width: 100%"
+            placeholder="请输入批次编号"
+          />
+        </el-form-item>
+        <el-form-item label="批次名称">
+          <el-input
+            v-model="editBatchForm.batchName"
+            maxlength="40"
+            show-word-limit
+            placeholder="请输入批次名称"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="editBatchDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="editingBatch" @click="handleEditBatch">保存批次</el-button>
+      </template>
+    </el-dialog>
     </div>
   </el-config-provider>
 </template>
@@ -352,6 +456,7 @@ const loading = ref(false);
 const progressRecords = ref([]);
 const orderCache = ref(new Map());
 const currentProjectKey = ref('');
+const currentBatchKey = ref('');
 const detailDialogVisible = ref(false);
 const detailRow = ref(null);
 const imagePreviewVisible = ref(false);
@@ -367,6 +472,19 @@ const editRow = ref(null);
 const originalExecutorIds = ref([]);
 const members = ref([]);
 const memberLoading = ref(false);
+const createBatchDialogVisible = ref(false);
+const creatingBatch = ref(false);
+const createBatchForm = ref({
+  batchNo: null,
+  batchName: ''
+});
+const editBatchDialogVisible = ref(false);
+const editingBatch = ref(false);
+const editBatchForm = ref({
+  batchNo: null,
+  batchName: ''
+});
+const editBatchSourceKey = ref('');
 
 // 解析日期值为 Date
 const parseDateValue = (value) => {
@@ -605,6 +723,56 @@ const normalizeLabel = (value) => {
   return String(value);
 };
 
+const normalizeBatchNo = (value) => {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    const normalizedNumber = Math.trunc(value);
+    return normalizedNumber > 0 ? String(normalizedNumber) : '';
+  }
+  const text = String(value).trim();
+  if (!text) return '';
+  const numeric = Number(text);
+  if (Number.isFinite(numeric)) {
+    const normalizedNumber = Math.trunc(numeric);
+    return normalizedNumber > 0 ? String(normalizedNumber) : '';
+  }
+  return text;
+};
+
+const parseBatchNoNumber = (value) => {
+  const normalized = normalizeBatchNo(value);
+  if (!normalized) return null;
+  const numeric = Number(normalized);
+  if (!Number.isFinite(numeric)) return null;
+  const asInt = Math.trunc(numeric);
+  return asInt > 0 ? asInt : null;
+};
+
+const buildBatchKey = (batchNo, batchName) => {
+  const normalizedNo = normalizeBatchNo(batchNo);
+  const normalizedName = normalizeLabel(batchName);
+  if (!normalizedNo && !normalizedName) return '__default_batch__';
+  return `${normalizedNo}||${normalizedName}`;
+};
+
+const buildBatchCardLabel = (batchNo, batchName) => {
+  const normalizedNo = normalizeBatchNo(batchNo);
+  const normalizedName = normalizeLabel(batchName);
+  if (normalizedNo && normalizedName) return `${normalizedName}（批次 ${normalizedNo}）`;
+  if (normalizedName) return normalizedName;
+  if (normalizedNo) return `批次 ${normalizedNo}`;
+  return '未分批';
+};
+
+const buildBatchCardSubLabel = (batchNo, batchName) => {
+  const normalizedNo = normalizeBatchNo(batchNo);
+  const normalizedName = normalizeLabel(batchName);
+  if (!normalizedNo && !normalizedName) return '历史节点';
+  if (normalizedNo && normalizedName) return `编号 ${normalizedNo}`;
+  if (normalizedNo) return `编号 ${normalizedNo}`;
+  return '未设置编号';
+};
+
 // 规范化阶段序号为可比较类型
 const normalizeOrderValue = (value) => {
   if (value === null || value === undefined) return null;
@@ -623,6 +791,19 @@ const compareOrderValue = (a, b) => {
   const bIsNumber = typeof b === 'number' && Number.isFinite(b);
   if (aIsNumber && bIsNumber) return a - b;
   return String(a).localeCompare(String(b), 'zh');
+};
+
+const compareBatchGroup = (a, b) => {
+  if (a.isDefault && !b.isDefault) return -1;
+  if (!a.isDefault && b.isDefault) return 1;
+  const aNo = parseBatchNoNumber(a.batchNo);
+  const bNo = parseBatchNoNumber(b.batchNo);
+  if (aNo !== null && bNo !== null && aNo !== bNo) return aNo - bNo;
+  if (aNo !== null && bNo === null) return -1;
+  if (aNo === null && bNo !== null) return 1;
+  const labelCompare = String(a.label || '').localeCompare(String(b.label || ''), 'zh');
+  if (labelCompare !== 0) return labelCompare;
+  return String(a.subLabel || '').localeCompare(String(b.subLabel || ''), 'zh');
 };
 
 const getRecordKey = (record) => {
@@ -715,6 +896,89 @@ const currentProject = computed(() => {
   );
 });
 
+const batchCards = computed(() => {
+  const grouped = new Map();
+  currentProject.value.records.forEach((record) => {
+    const batchNo = normalizeBatchNo(record.batch_no);
+    const batchName = normalizeLabel(record.batch_name);
+    const key = buildBatchKey(batchNo, batchName);
+    if (!grouped.has(key)) {
+      grouped.set(key, {
+        key,
+        batchNo,
+        batchName,
+        label: buildBatchCardLabel(batchNo, batchName),
+        subLabel: buildBatchCardSubLabel(batchNo, batchName),
+        isDefault: !batchNo && !batchName,
+        recordCount: 0,
+        records: []
+      });
+    }
+    const target = grouped.get(key);
+    target.recordCount += 1;
+    target.records.push(record);
+  });
+  return Array.from(grouped.values())
+    .sort(compareBatchGroup)
+    .map((item) => ({
+      ...item,
+      subLabel: `${item.subLabel} · ${item.recordCount} 个节点`
+    }));
+});
+
+watch(
+  batchCards,
+  (cards) => {
+    if (!cards.length) {
+      currentBatchKey.value = '';
+      return;
+    }
+    if (!cards.some((item) => item.key === currentBatchKey.value)) {
+      currentBatchKey.value = cards[0].key;
+    }
+  },
+  { immediate: true }
+);
+
+const currentBatchCard = computed(() => {
+  if (!batchCards.value.length) return null;
+  return batchCards.value.find((item) => item.key === currentBatchKey.value) || batchCards.value[0];
+});
+
+const currentBatchRecords = computed(() => currentBatchCard.value?.records || []);
+
+const getTemplateStageKey = (record) => {
+  if (!record || typeof record !== 'object') return '';
+  return [
+    normalizeLabel(record.main_stage || record.mainStage),
+    normalizeLabel(record.project_stage || record.projectStage || record.stage),
+    normalizeLabel(record.main_stage_order),
+    normalizeLabel(record.project_stage_order)
+  ].join('||');
+};
+
+const dedupeTemplateRecords = (records) => {
+  const source = Array.isArray(records) ? records : [];
+  const map = new Map();
+  source.forEach((record, index) => {
+    const key = getTemplateStageKey(record) || `__fallback__${index}`;
+    if (!map.has(key)) {
+      map.set(key, record);
+    }
+  });
+  return Array.from(map.values());
+};
+
+const batchTemplateRecords = computed(() => {
+  if (currentBatchRecords.value.length) {
+    return dedupeTemplateRecords(currentBatchRecords.value);
+  }
+  if (currentProject.value.records.length) {
+    return dedupeTemplateRecords(currentProject.value.records);
+  }
+  return [];
+});
+
 // 当前项目标题
 const currentProjectLabel = computed(() => {
   const name = currentProject.value.projectName || '暂无项目';
@@ -740,6 +1004,8 @@ const normalizeNode = (record, index) => {
   const planStartDate = planRange.start || null;
   const planEndDate = parseDateValue(record.plan_finishtime) || planRange.end || null;
   const actualFinishDate = parseDateValue(record.actual_finish) || null;
+  const batchNo = normalizeBatchNo(record.batch_no);
+  const batchName = normalizeLabel(record.batch_name);
 
   const mainStageLabel = normalizeLabel(record.main_stage || record.mainStage);
   const projectStageLabel = normalizeLabel(record.project_stage || record.projectStage || record.stage);
@@ -754,6 +1020,10 @@ const normalizeNode = (record, index) => {
     name: fallbackLabel,
     mainStageLabel,
     nodeLabel,
+    batchNo,
+    batchName,
+    batchKey: buildBatchKey(batchNo, batchName),
+    batchCardLabel: buildBatchCardLabel(batchNo, batchName),
     mainStageOrder: normalizeOrderValue(record.main_stage_order),
     projectStageOrder: normalizeOrderValue(record.project_stage_order),
     status: record.status || '未完成',
@@ -778,7 +1048,7 @@ const normalizeNode = (record, index) => {
 
 // 时间轴节点（按序号/时间排序）
 const timelineNodes = computed(() => {
-  const nodes = currentProject.value.records.map((record, index) => normalizeNode(record, index));
+  const nodes = currentBatchRecords.value.map((record, index) => normalizeNode(record, index));
   nodes.sort((a, b) => a.originalIndex - b.originalIndex);
 
   const grouped = new Map();
@@ -999,6 +1269,242 @@ const loadProgressRecords = async (search = '') => {
 const handleSearch = async () => {
   await loadProgressRecords(searchQuery.value.trim());
 };
+
+const handleBatchCardClick = (batchKey) => {
+  currentBatchKey.value = batchKey;
+};
+
+const getNextBatchNo = () => {
+  let maxBatchNo = 0;
+  batchCards.value.forEach((item) => {
+    const numeric = parseBatchNoNumber(item.batchNo);
+    if (numeric !== null && numeric > maxBatchNo) {
+      maxBatchNo = numeric;
+    }
+  });
+  return maxBatchNo + 1;
+};
+
+const hasDuplicatedBatchNo = (batchNo, excludeKey = '') =>
+  batchCards.value.some(
+    (item) => item.key !== excludeKey && normalizeBatchNo(item.batchNo) === String(batchNo)
+  );
+
+const hasDuplicatedBatchName = (batchName, excludeKey = '') =>
+  batchCards.value.some(
+    (item) =>
+      item.key !== excludeKey &&
+      normalizeLabel(item.batchName) &&
+      normalizeLabel(item.batchName) === batchName
+  );
+
+const openCreateBatchDialog = () => {
+  if (!currentProject.value.records.length) {
+    ElMessage.warning('当前项目暂无可新增批次的节点');
+    return;
+  }
+  if (!batchTemplateRecords.value.length) {
+    ElMessage.warning('当前批次暂无可复制的节点');
+    return;
+  }
+  const nextBatchNo = getNextBatchNo();
+  createBatchForm.value = {
+    batchNo: nextBatchNo,
+    batchName: `第${nextBatchNo}批`
+  };
+  createBatchDialogVisible.value = true;
+};
+
+const openEditBatchDialog = () => {
+  if (!currentBatchCard.value) {
+    ElMessage.warning('请先选择要编辑的批次');
+    return;
+  }
+  const targetBatch = currentBatchCard.value;
+  const currentBatchNo = parseBatchNoNumber(targetBatch.batchNo);
+  editBatchSourceKey.value = targetBatch.key;
+  editBatchForm.value = {
+    batchNo: currentBatchNo,
+    batchName: normalizeLabel(targetBatch.batchName)
+  };
+  editBatchDialogVisible.value = true;
+};
+
+const buildBatchCreatePayload = (record, batchNo, batchName) => {
+  const payload = {
+    project_code: normalizeLabel(record.project_code),
+    project_name: normalizeLabel(record.project_name),
+    project_type: normalizeLabel(record.project_type),
+    main_stage: normalizeLabel(record.main_stage || record.mainStage),
+    main_stage_order: record.main_stage_order ?? '',
+    project_stage: normalizeLabel(record.project_stage || record.projectStage || record.stage),
+    project_stage_order: record.project_stage_order ?? '',
+    executor: record.executor || [],
+    plan_time: record.plan_time ?? '',
+    plan_finishtime: record.plan_finishtime ?? '',
+    status: '未完成',
+    warning_level: '正常',
+    actual_finish: '',
+    site_upload: [],
+    execution_note: '',
+    overdue_reason: '',
+    batch_no: batchNo,
+    batch_name: batchName
+  };
+  return Object.fromEntries(Object.entries(payload).filter(([, value]) => value !== undefined));
+};
+
+const handleCreateBatch = async () => {
+  const batchNo = parseBatchNoNumber(createBatchForm.value.batchNo);
+  const batchName = normalizeLabel(createBatchForm.value.batchName);
+
+  if (batchNo === null) {
+    ElMessage.warning('批次编号必须为正整数');
+    return;
+  }
+  if (!batchName) {
+    ElMessage.warning('请输入批次名称');
+    return;
+  }
+
+  const batchKey = buildBatchKey(batchNo, batchName);
+  if (hasDuplicatedBatchNo(batchNo)) {
+    ElMessage.warning('该批次编号已存在，请使用其他编号');
+    return;
+  }
+  if (hasDuplicatedBatchName(batchName) || batchCards.value.some((item) => item.key === batchKey)) {
+    ElMessage.warning('该批次名称已存在，请使用其他名称');
+    return;
+  }
+
+  const templates = batchTemplateRecords.value;
+  if (!templates.length) {
+    ElMessage.warning('当前没有可复制的节点模板');
+    return;
+  }
+
+  creatingBatch.value = true;
+  try {
+    const createTasks = templates.map((record) =>
+      api.createProjectProgress(buildBatchCreatePayload(record, batchNo, batchName))
+    );
+    const results = await Promise.allSettled(createTasks);
+    const successCount = results.filter(
+      (item) => item.status === 'fulfilled' && item.value?.code === 200
+    ).length;
+    const failedCount = results.length - successCount;
+
+    if (!successCount) {
+      ElMessage.error('新增批次失败');
+      return;
+    }
+    if (failedCount > 0) {
+      ElMessage.warning(`新增批次完成：成功 ${successCount} 条，失败 ${failedCount} 条`);
+    } else {
+      ElMessage.success(`新增批次成功：共创建 ${successCount} 条节点`);
+    }
+    createBatchDialogVisible.value = false;
+    await loadProgressRecords(searchQuery.value.trim());
+    currentBatchKey.value = batchKey;
+  } catch (error) {
+    console.error('新增批次失败：', error);
+    ElMessage.error('新增批次失败');
+  } finally {
+    creatingBatch.value = false;
+  }
+};
+
+const handleEditBatch = async () => {
+  const sourceKey = editBatchSourceKey.value;
+  const sourceBatch = batchCards.value.find((item) => item.key === sourceKey);
+  if (!sourceBatch) {
+    ElMessage.error('未找到要编辑的批次');
+    return;
+  }
+
+  const batchNo = parseBatchNoNumber(editBatchForm.value.batchNo);
+  const batchName = normalizeLabel(editBatchForm.value.batchName);
+  if (batchNo === null) {
+    ElMessage.warning('批次编号必须为正整数');
+    return;
+  }
+  if (!batchName) {
+    ElMessage.warning('请输入批次名称');
+    return;
+  }
+
+  const nextBatchKey = buildBatchKey(batchNo, batchName);
+  if (hasDuplicatedBatchNo(batchNo, sourceKey)) {
+    ElMessage.warning('该批次编号已存在，请使用其他编号');
+    return;
+  }
+  if (hasDuplicatedBatchName(batchName, sourceKey) || batchCards.value.some((item) => item.key === nextBatchKey && item.key !== sourceKey)) {
+    ElMessage.warning('该批次名称已存在，请使用其他名称');
+    return;
+  }
+
+  if (nextBatchKey === sourceKey) {
+    ElMessage.warning('批次信息未变化');
+    return;
+  }
+
+  const records = Array.isArray(sourceBatch.records) ? sourceBatch.records : [];
+  const validRecords = records.filter((item) => item && (item._id || item.id));
+  if (!validRecords.length) {
+    ElMessage.error('该批次没有可更新的节点记录');
+    return;
+  }
+
+  editingBatch.value = true;
+  try {
+    const updateTasks = validRecords.map((record) =>
+      api.updateProjectProgress(record._id || record.id, {
+        batch_no: batchNo,
+        batch_name: batchName
+      })
+    );
+    const results = await Promise.allSettled(updateTasks);
+    const successCount = results.filter(
+      (item) => item.status === 'fulfilled' && item.value?.code === 200
+    ).length;
+    const failedCount = results.length - successCount;
+
+    if (!successCount) {
+      ElMessage.error('批次编辑失败');
+      return;
+    }
+    if (failedCount > 0) {
+      ElMessage.warning(`批次编辑完成：成功 ${successCount} 条，失败 ${failedCount} 条`);
+    } else {
+      ElMessage.success(`批次编辑成功：共更新 ${successCount} 条节点`);
+    }
+    editBatchDialogVisible.value = false;
+    await loadProgressRecords(searchQuery.value.trim());
+    currentBatchKey.value = nextBatchKey;
+  } catch (error) {
+    console.error('批次编辑失败：', error);
+    ElMessage.error('批次编辑失败');
+  } finally {
+    editingBatch.value = false;
+  }
+};
+
+watch(createBatchDialogVisible, (visible) => {
+  if (visible) return;
+  createBatchForm.value = {
+    batchNo: null,
+    batchName: ''
+  };
+});
+
+watch(editBatchDialogVisible, (visible) => {
+  if (visible) return;
+  editBatchSourceKey.value = '';
+  editBatchForm.value = {
+    batchNo: null,
+    batchName: ''
+  };
+});
 
 // 拉取成员列表
 const loadMembers = async () => {
@@ -1410,6 +1916,76 @@ onMounted(async () => {
   font-size: 16px;
 }
 
+.table-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.batch-card-panel {
+  margin-top: 14px;
+  border-top: 1px solid #f0f2f5;
+  padding-top: 12px;
+}
+
+.batch-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.batch-card-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #303133;
+}
+
+.batch-card-desc {
+  font-size: 12px;
+  color: #909399;
+}
+
+.batch-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.batch-card-item {
+  border: 1px solid #dcdfe6;
+  border-radius: 8px;
+  background: #fff;
+  padding: 10px 12px;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: #303133;
+}
+
+.batch-card-item:hover {
+  border-color: #b9ddff;
+  box-shadow: 0 6px 12px rgba(24, 144, 255, 0.08);
+}
+
+.batch-card-item.is-active {
+  border-color: #1890ff;
+  background: #e6f4ff;
+}
+
+.batch-card-main {
+  font-size: 14px;
+  line-height: 1.3;
+  font-weight: 600;
+}
+
+.batch-card-sub {
+  margin-top: 5px;
+  font-size: 12px;
+  color: #8c8c8c;
+}
+
 :deep(.table-group-row) td {
   background: #fafafa;
 }
@@ -1549,6 +2125,11 @@ onMounted(async () => {
 
   .project-name-large {
     text-align: left;
+  }
+
+  .batch-card-header {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }
 </style>

@@ -81,6 +81,7 @@
               <div class="project-cell">
                 <div class="project-title">{{ row.projectLabel }}</div>
                 <div class="project-stage">{{ row.stageLabel }}</div>
+                <div v-if="row.batchLabel" class="project-batch">{{ row.batchLabel }}</div>
               </div>
             </template>
           </el-table-column>
@@ -126,6 +127,7 @@
                   <div>
                     <div class="project-title">{{ row.projectLabel }}</div>
                     <div class="project-stage">{{ row.stageLabel }}</div>
+                    <div v-if="row.batchLabel" class="project-batch">{{ row.batchLabel }}</div>
                   </div>
                   <el-tag :type="getStatusTag(row.status)" effect="dark">
                     {{ row.status || '未完成' }}
@@ -180,6 +182,8 @@
         <el-descriptions :column="isMobile ? 1 : 2" border>
           <el-descriptions-item label="项目">{{ detailRow.projectLabel }}</el-descriptions-item>
           <el-descriptions-item label="执行阶段">{{ detailRow.stageLabel }}</el-descriptions-item>
+          <el-descriptions-item label="批次编号">{{ detailRow.batchNo || '--' }}</el-descriptions-item>
+          <el-descriptions-item label="批次名称">{{ detailRow.batchName || '--' }}</el-descriptions-item>
           <el-descriptions-item label="计划开始">{{ detailRow.planStart || '--' }}</el-descriptions-item>
           <el-descriptions-item label="计划完成">{{ detailRow.planEnd || '--' }}</el-descriptions-item>
           <el-descriptions-item label="实际完成">{{ detailRow.actualFinish || '--' }}</el-descriptions-item>
@@ -497,12 +501,39 @@ const normalizeLabel = (value) => {
   return String(value);
 };
 
+const normalizeBatchNo = (value) => {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    const normalizedNumber = Math.trunc(value);
+    return normalizedNumber > 0 ? String(normalizedNumber) : '';
+  }
+  const text = String(value).trim();
+  if (!text) return '';
+  const numeric = Number(text);
+  if (Number.isFinite(numeric)) {
+    const normalizedNumber = Math.trunc(numeric);
+    return normalizedNumber > 0 ? String(normalizedNumber) : '';
+  }
+  return text;
+};
+
+const buildBatchLabel = (batchNo, batchName) => {
+  const normalizedNo = normalizeBatchNo(batchNo);
+  const normalizedName = normalizeLabel(batchName);
+  if (normalizedNo && normalizedName) return `${normalizedName}（批次 ${normalizedNo}）`;
+  if (normalizedName) return normalizedName;
+  if (normalizedNo) return `批次 ${normalizedNo}`;
+  return '';
+};
+
 // 规范化记录为前端展示结构
 const normalizeRecord = (record, index) => {
   const planRange = parseDateRange(record.plan_time);
   const planStartDate = planRange.start || null;
   const planEndDate = parseDateValue(record.plan_finishtime) || planRange.end || null;
   const actualFinishDate = parseDateValue(record.actual_finish);
+  const batchNo = normalizeBatchNo(record.batch_no);
+  const batchName = normalizeLabel(record.batch_name);
 
   const projectName = normalizeLabel(record.project_name) || '未命名项目';
   const projectCode = normalizeLabel(record.project_code);
@@ -510,7 +541,11 @@ const normalizeRecord = (record, index) => {
 
   const mainStageLabel = normalizeLabel(record.main_stage || record.mainStage);
   const projectStageLabel = normalizeLabel(record.project_stage || record.projectStage || record.stage);
-  const stageLabel = mainStageLabel || projectStageLabel || `阶段${index + 1}`;
+  const stageLabel = projectStageLabel
+    ? mainStageLabel && mainStageLabel !== projectStageLabel
+      ? `${mainStageLabel} / ${projectStageLabel}`
+      : projectStageLabel
+    : mainStageLabel || `阶段${index + 1}`;
 
   return {
     recordId: record._id || `${index}`,
@@ -522,6 +557,9 @@ const normalizeRecord = (record, index) => {
     mainStageLabel,
     projectStageLabel,
     stageLabel,
+    batchNo,
+    batchName,
+    batchLabel: buildBatchLabel(batchNo, batchName),
     planStartRaw: planStartDate,
     planEndRaw: planEndDate,
     planStart: formatDateCell(planStartDate),
@@ -546,6 +584,7 @@ const matchesSearch = (row, query) => {
     row.projectName,
     row.projectCode,
     row.stageLabel,
+    row.batchLabel,
     row.executorName,
     row.status,
     row.warningLevel
@@ -727,25 +766,13 @@ const openSubmitDialog = (row) => {
   submitDialogVisible.value = true;
 };
 
-// 判断记录是否已超期（按当前时间）
-const isRowOverdueByNow = (row) => {
-  if (!row) return false;
-  if (row.status === '超期') return true;
-  const planEnd = row.planEndRaw;
-  if (!(planEnd instanceof Date) || Number.isNaN(planEnd.getTime())) return false;
-  return new Date().getTime() > planEnd.getTime();
-};
-
 const hasOverdueReason = (row) => Boolean((row?.overdueReason || '').toString().trim());
 
-// 超期流程第一步：先提交超期原因并将状态改为“超期”
+// 仅当状态已是“超期”且未填原因时，要求先补充超期原因
 const submitNeedsOverdueReport = computed(() => {
   if (!submitRow.value) return false;
   if (isDone(submitRow.value.status)) return false;
-  if (submitRow.value.status === '超期') {
-    return !hasOverdueReason(submitRow.value);
-  }
-  return isRowOverdueByNow(submitRow.value);
+  return submitRow.value.status === '超期' && !hasOverdueReason(submitRow.value);
 });
 
 // 当前提交是否需要填写超期原因
@@ -1141,6 +1168,17 @@ onBeforeUnmount(() => {
 .project-stage {
   color: #606266;
   font-size: 13px;
+}
+
+.project-batch {
+  display: inline-flex;
+  align-items: center;
+  font-size: 12px;
+  color: #1677ff;
+  background: rgba(22, 119, 255, 0.12);
+  border-radius: 999px;
+  padding: 2px 10px;
+  width: fit-content;
 }
 
 .mobile-only {
