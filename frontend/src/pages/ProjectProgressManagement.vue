@@ -132,6 +132,14 @@
           <div class="table-actions">
             <el-button
               type="primary"
+              size="small"
+              :disabled="!stageOptions.length || !currentBatchCard"
+              @click="openCreateNodeDialog()"
+            >
+              新增节点
+            </el-button>
+            <el-button
+              type="primary"
               plain
               size="small"
               :disabled="!currentBatchCard"
@@ -174,6 +182,12 @@
                 <span class="stage-node-dot"></span>
                 <span class="stage-node-text">{{ row.nodeLabel || row.name }}</span>
               </div>
+            </template>
+          </el-table-column>
+          <el-table-column label="节点序号" width="90" align="center">
+            <template #default="{ row }">
+              <span v-if="!row.isGroup && row.projectStageOrder !== null">{{ row.projectStageOrder }}</span>
+              <span v-else class="stage-placeholder">--</span>
             </template>
           </el-table-column>
           <el-table-column label="批次" width="200" align="center">
@@ -225,8 +239,45 @@
           <el-table-column label="操作" width="180" align="center" fixed="right">
             <template #default="{ row }">
               <div v-if="!row.isGroup" class="action-buttons">
-                <el-button type="primary" link @click="openDetailDialog(row)">查看详情</el-button>
-                <el-button type="primary" link @click="openEditDialog(row)">编辑</el-button>
+                <el-button
+                  v-if="row.mainStageLabel"
+                  class="action-link"
+                  type="primary"
+                  link
+                  size="small"
+                  @click="openCreateNodeDialog(row)"
+                >
+                  新增
+                </el-button>
+                <el-button
+                  class="action-link"
+                  type="primary"
+                  link
+                  size="small"
+                  @click="openDetailDialog(row)"
+                >
+                  详情
+                </el-button>
+                <el-button
+                  v-if="canManageNode(row)"
+                  class="action-link"
+                  type="primary"
+                  link
+                  size="small"
+                  @click="openEditDialog(row)"
+                >
+                  编辑
+                </el-button>
+                <el-button
+                  v-if="canManageNode(row)"
+                  class="action-link action-link--danger"
+                  type="danger"
+                  link
+                  size="small"
+                  @click="handleDeleteNode(row)"
+                >
+                  删除
+                </el-button>
               </div>
               <span v-else class="stage-placeholder">--</span>
             </template>
@@ -339,11 +390,46 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="editDialogVisible" title="编辑节点" width="520px">
+    <el-dialog v-model="createNodeDialogVisible" title="新增节点" width="560px">
     <el-form label-width="110px">
-            <el-form-item label="计划开始日期">
+      <el-form-item label="主阶段">
+        <el-select
+          v-model="createNodeForm.stageKey"
+          placeholder="请选择主阶段"
+          filterable
+          style="width: 100%"
+        >
+          <el-option
+            v-for="item in stageOptions"
+            :key="item.key"
+            :label="item.order !== null ? `${item.label}（阶段 ${item.order}）` : item.label"
+            :value="item.key"
+          />
+        </el-select>
+      </el-form-item>
+      <el-form-item label="节点名称">
+        <el-input
+          v-model="createNodeForm.nodeName"
+          maxlength="40"
+          show-word-limit
+          placeholder="请输入节点名称"
+        />
+      </el-form-item>
+      <el-form-item label="插入序号">
+        <el-input-number
+          v-model="createNodeForm.orderNo"
+          :min="1"
+          :max="Math.max(createNodeOrderMax, 1)"
+          :step="1"
+          :precision="0"
+          controls-position="right"
+          style="width: 100%"
+        />
+        <div class="dialog-hint">{{ createNodeScopeHint }}</div>
+      </el-form-item>
+      <el-form-item label="计划开始日期">
         <el-date-picker
-          v-model="editForm.planEnd"
+          v-model="createNodeForm.planStart"
           type="date"
           value-format="YYYY-MM-DD"
           placeholder="请选择日期"
@@ -352,7 +438,84 @@
       </el-form-item>
       <el-form-item label="计划结束日期">
         <el-date-picker
+          v-model="createNodeForm.planEnd"
+          type="date"
+          value-format="YYYY-MM-DD"
+          placeholder="请选择日期"
+          style="width: 100%"
+        />
+      </el-form-item>
+      <el-form-item label="责任人">
+        <el-select
+          v-model="createNodeForm.executorIds"
+          multiple
+          collapse-tags
+          collapse-tags-tooltip
+          filterable
+          placeholder="请选择成员"
+          style="width: 100%"
+          :loading="memberLoading"
+        >
+          <el-option
+            v-for="item in memberOptions"
+            :key="item.id"
+            :label="item.label"
+            :value="item.id"
+          />
+        </el-select>
+      </el-form-item>
+      <el-form-item label="同步所有批次">
+        <div class="dialog-switch-wrap">
+          <el-switch v-model="createNodeForm.syncAllBatches" />
+          <span class="dialog-switch-label">
+            开启后会在当前项目所有批次的同主阶段插入该节点
+          </span>
+        </div>
+      </el-form-item>
+    </el-form>
+    <template #footer>
+      <el-button @click="createNodeDialogVisible = false">取消</el-button>
+      <el-button type="primary" :loading="creatingNode" @click="handleCreateNode">确定新增</el-button>
+    </template>
+    </el-dialog>
+
+    <el-dialog v-model="editDialogVisible" title="编辑节点" width="560px">
+    <el-form label-width="110px">
+      <el-form-item label="主阶段">
+        <el-input :model-value="editRow?.mainStageLabel || '--'" disabled />
+      </el-form-item>
+      <el-form-item label="节点名称">
+        <el-input
+          v-model="editForm.nodeName"
+          maxlength="40"
+          show-word-limit
+          placeholder="请输入节点名称"
+        />
+      </el-form-item>
+      <el-form-item label="节点序号">
+        <el-input-number
+          v-model="editForm.orderNo"
+          :min="1"
+          :max="Math.max(editNodeOrderMax, 1)"
+          :step="1"
+          :precision="0"
+          controls-position="right"
+          style="width: 100%"
+        />
+        <div class="dialog-hint">{{ editNodeOrderHint }}</div>
+      </el-form-item>
+      <el-form-item label="计划开始日期">
+        <el-date-picker
           v-model="editForm.planStart"
+          type="date"
+          value-format="YYYY-MM-DD"
+          placeholder="请选择日期"
+          style="width: 100%"
+        />
+      </el-form-item>
+      <el-form-item label="计划结束日期">
+        <el-date-picker
+          v-model="editForm.planEnd"
           type="date"
           value-format="YYYY-MM-DD"
           placeholder="请选择日期"
@@ -446,10 +609,35 @@
 
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue';
-import { ElMessage, ElConfigProvider } from 'element-plus';
+import { ElMessage, ElMessageBox, ElConfigProvider } from 'element-plus';
 import zhCn from 'element-plus/es/locale/lang/zh-cn';
-import { Search, Check, WarningFilled, Flag, TrendCharts, Bell } from '@element-plus/icons-vue';
+import {
+  Search,
+  Check,
+  WarningFilled,
+  Flag,
+  TrendCharts,
+  Bell
+} from '@element-plus/icons-vue';
 import api from '../api/client';
+
+const buildEmptyCreateNodeForm = () => ({
+  stageKey: '',
+  nodeName: '',
+  orderNo: 1,
+  planStart: '',
+  planEnd: '',
+  executorIds: [],
+  syncAllBatches: false
+});
+
+const buildEmptyEditForm = () => ({
+  nodeName: '',
+  orderNo: 1,
+  planStart: '',
+  planEnd: '',
+  executorIds: []
+});
 
 const searchQuery = ref('');
 const loading = ref(false);
@@ -461,15 +649,18 @@ const detailDialogVisible = ref(false);
 const detailRow = ref(null);
 const imagePreviewVisible = ref(false);
 const previewImageItem = ref(null);
+const createNodeDialogVisible = ref(false);
+const creatingNode = ref(false);
+const createNodeForm = ref(buildEmptyCreateNodeForm());
 const editDialogVisible = ref(false);
 const savingEdit = ref(false);
-const editForm = ref({
-  planStart: '',
-  planEnd: '',
-  executorIds: []
-});
+const editForm = ref(buildEmptyEditForm());
 const editRow = ref(null);
 const originalExecutorIds = ref([]);
+const originalPlanRange = ref({
+  planStart: '',
+  planEnd: ''
+});
 const members = ref([]);
 const memberLoading = ref(false);
 const createBatchDialogVisible = ref(false);
@@ -793,6 +984,69 @@ const compareOrderValue = (a, b) => {
   return String(a).localeCompare(String(b), 'zh');
 };
 
+const compareTextValue = (a, b) => String(a || '').localeCompare(String(b || ''), 'zh');
+
+const parsePositiveInt = (value) => {
+  if (value === null || value === undefined || value === '') return null;
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return null;
+  const normalizedNumber = Math.trunc(numeric);
+  return normalizedNumber > 0 ? normalizedNumber : null;
+};
+
+const buildStageKey = (mainStage, mainStageOrder) =>
+  `${normalizeLabel(mainStage)}||${normalizeLabel(mainStageOrder)}`;
+
+const getProgressRecordId = (record) =>
+  record?._id || record?.id || record?.record_id || record?.recordId || '';
+
+const getMainStageLabel = (record) =>
+  normalizeLabel(record?.main_stage || record?.mainStage || record?.mainStageLabel);
+
+const getMainStageOrder = (record) =>
+  normalizeOrderValue(record?.main_stage_order ?? record?.mainStageOrder);
+
+const getProjectStageLabel = (record) =>
+  normalizeLabel(record?.project_stage || record?.projectStage || record?.stage || record?.nodeLabel);
+
+const getProjectStageOrder = (record) =>
+  normalizeOrderValue(record?.project_stage_order ?? record?.projectStageOrder);
+
+const hasProjectStageRecord = (record) => Boolean(getProjectStageLabel(record));
+
+const buildStageOptionFromRecord = (record) => {
+  const label = getMainStageLabel(record);
+  if (!label) return null;
+  const order = getMainStageOrder(record);
+  return {
+    key: buildStageKey(label, order),
+    label,
+    order
+  };
+};
+
+const compareStageNodePosition = (a, b) => {
+  const mainOrderCompare = compareOrderValue(getMainStageOrder(a), getMainStageOrder(b));
+  if (mainOrderCompare !== 0) return mainOrderCompare;
+
+  const mainLabelCompare = compareTextValue(getMainStageLabel(a), getMainStageLabel(b));
+  if (mainLabelCompare !== 0) return mainLabelCompare;
+
+  const aHasStage = hasProjectStageRecord(a);
+  const bHasStage = hasProjectStageRecord(b);
+  if (aHasStage !== bHasStage) {
+    return aHasStage ? 1 : -1;
+  }
+
+  const stageOrderCompare = compareOrderValue(getProjectStageOrder(a), getProjectStageOrder(b));
+  if (stageOrderCompare !== 0) return stageOrderCompare;
+
+  const stageLabelCompare = compareTextValue(getProjectStageLabel(a), getProjectStageLabel(b));
+  if (stageLabelCompare !== 0) return stageLabelCompare;
+
+  return compareOrderValue(a?.originalIndex, b?.originalIndex);
+};
+
 const compareBatchGroup = (a, b) => {
   if (a.isDefault && !b.isDefault) return -1;
   if (!a.isDefault && b.isDefault) return 1;
@@ -979,6 +1233,139 @@ const batchTemplateRecords = computed(() => {
   return [];
 });
 
+const stageOptions = computed(() => {
+  const map = new Map();
+  currentProject.value.records.forEach((record) => {
+    const option = buildStageOptionFromRecord(record);
+    if (!option || map.has(option.key)) return;
+    map.set(option.key, option);
+  });
+  return Array.from(map.values()).sort((a, b) => {
+    const orderCompare = compareOrderValue(a.order, b.order);
+    if (orderCompare !== 0) return orderCompare;
+    return compareTextValue(a.label, b.label);
+  });
+});
+
+const currentBatchDescriptor = computed(() => {
+  if (!currentBatchCard.value) return null;
+  return {
+    key: currentBatchCard.value.key,
+    batchNo: currentBatchCard.value.batchNo,
+    batchName: currentBatchCard.value.batchName
+  };
+});
+
+const getStageOptionByKey = (stageKey) =>
+  stageOptions.value.find((item) => item.key === stageKey) || null;
+
+const getTargetBatchDescriptors = (syncAllBatches = false) => {
+  if (syncAllBatches) {
+    return batchCards.value.map((item) => ({
+      key: item.key,
+      batchNo: item.batchNo,
+      batchName: item.batchName
+    }));
+  }
+  return currentBatchDescriptor.value ? [currentBatchDescriptor.value] : [];
+};
+
+const getStageNodeRecords = ({
+  stageOption,
+  batchKey,
+  records = currentProject.value.records,
+  excludeRecordId = ''
+} = {}) => {
+  if (!stageOption || !batchKey) return [];
+  const stageOrderText = normalizeLabel(stageOption.order);
+  const matched = [];
+  records.forEach((record, index) => {
+    if (buildBatchKey(record.batch_no, record.batch_name) !== batchKey) return;
+    if (!hasProjectStageRecord(record)) return;
+    if (getMainStageLabel(record) !== stageOption.label) return;
+    if (normalizeLabel(getMainStageOrder(record)) !== stageOrderText) return;
+    const recordId = getProgressRecordId(record);
+    if (excludeRecordId && recordId === excludeRecordId) return;
+    matched.push({
+      record,
+      originalIndex: index
+    });
+  });
+  matched.sort((a, b) =>
+    compareStageNodePosition(
+      { ...a.record, originalIndex: a.originalIndex },
+      { ...b.record, originalIndex: b.originalIndex }
+    )
+  );
+  return matched.map((item) => item.record);
+};
+
+const resolveNodePosition = (row) => {
+  if (!row) return 1;
+  const stageOption = buildStageOptionFromRecord(row);
+  const batchKey = row.batchKey || currentBatchDescriptor.value?.key || '';
+  if (!stageOption || !batchKey) return parsePositiveInt(row.projectStageOrder) || 1;
+  const records = getStageNodeRecords({ stageOption, batchKey });
+  const index = records.findIndex((record) => getProgressRecordId(record) === row.recordId);
+  if (index >= 0) return index + 1;
+  return parsePositiveInt(row.projectStageOrder) || 1;
+};
+
+const createNodeStageOption = computed(() => getStageOptionByKey(createNodeForm.value.stageKey));
+
+const createNodeOrderMax = computed(() => {
+  if (!createNodeStageOption.value) return 1;
+  const targetBatches = getTargetBatchDescriptors(createNodeForm.value.syncAllBatches);
+  if (!targetBatches.length) return 1;
+  const maxOrder = targetBatches.reduce((minValue, batch) => {
+    const count = getStageNodeRecords({
+      stageOption: createNodeStageOption.value,
+      batchKey: batch.key
+    }).length;
+    return Math.min(minValue, count + 1);
+  }, Number.MAX_SAFE_INTEGER);
+  return Number.isFinite(maxOrder) && maxOrder > 0 ? maxOrder : 1;
+});
+
+const createNodeScopeHint = computed(() => {
+  if (!createNodeStageOption.value) return '请选择主阶段';
+  const targetBatches = getTargetBatchDescriptors(createNodeForm.value.syncAllBatches);
+  if (!targetBatches.length) return '当前没有可操作的批次';
+  const currentCount = currentBatchDescriptor.value
+    ? getStageNodeRecords({
+        stageOption: createNodeStageOption.value,
+        batchKey: currentBatchDescriptor.value.key
+      }).length
+    : 0;
+  if (createNodeForm.value.syncAllBatches) {
+    return `将同步 ${targetBatches.length} 个批次；为避免序号断档，插入序号范围为 1 - ${createNodeOrderMax.value}`;
+  }
+  return `当前批次该主阶段共有 ${currentCount} 个节点，可插入序号范围为 1 - ${createNodeOrderMax.value}`;
+});
+
+const editNodeStageOption = computed(() => {
+  if (!editRow.value) return null;
+  return buildStageOptionFromRecord(editRow.value);
+});
+
+const editNodeOrderMax = computed(() => {
+  if (!editNodeStageOption.value || !currentBatchDescriptor.value) return 1;
+  const records = getStageNodeRecords({
+    stageOption: editNodeStageOption.value,
+    batchKey: currentBatchDescriptor.value.key
+  });
+  return records.length || 1;
+});
+
+const editNodeOrderHint = computed(() => {
+  if (!editNodeStageOption.value || !currentBatchDescriptor.value) return '当前无法调整节点序号';
+  const count = getStageNodeRecords({
+    stageOption: editNodeStageOption.value,
+    batchKey: currentBatchDescriptor.value.key
+  }).length;
+  return `保存后会按新的序号重排当前批次该主阶段的 ${count} 个节点`;
+});
+
 // 当前项目标题
 const currentProjectLabel = computed(() => {
   const name = currentProject.value.projectName || '暂无项目';
@@ -1049,7 +1436,7 @@ const normalizeNode = (record, index) => {
 // 时间轴节点（按序号/时间排序）
 const timelineNodes = computed(() => {
   const nodes = currentBatchRecords.value.map((record, index) => normalizeNode(record, index));
-  nodes.sort((a, b) => a.originalIndex - b.originalIndex);
+  nodes.sort(compareStageNodePosition);
 
   const grouped = new Map();
   const groupOrder = [];
@@ -1241,6 +1628,74 @@ const getWarningTag = (level) => {
   return 'success';
 };
 
+const canManageNode = (row) => Boolean(row && !row.isGroup && row.recordId && getProjectStageLabel(row));
+
+const summarizeMutationResults = (results) => {
+  const successCount = results.filter(
+    (item) => item.status === 'fulfilled' && item.value?.code === 200
+  ).length;
+  return {
+    total: results.length,
+    successCount,
+    failedCount: results.length - successCount
+  };
+};
+
+const applyStageOrderAssignments = async (assignments, extraPayloadMap = new Map()) => {
+  const tasks = assignments.reduce((list, { record, orderNo }) => {
+    const recordId = getProgressRecordId(record);
+    if (!recordId) return list;
+    const payload = { ...(extraPayloadMap.get(recordId) || {}) };
+    const currentOrder = parsePositiveInt(record.project_stage_order);
+    if (currentOrder !== orderNo) {
+      payload.project_stage_order = orderNo;
+    }
+    if (!Object.keys(payload).length) return list;
+    list.push(() => api.updateProjectProgress(recordId, payload));
+    return list;
+  }, []);
+
+  if (!tasks.length) {
+    return {
+      total: 0,
+      successCount: 0,
+      failedCount: 0
+    };
+  }
+
+  const results = await Promise.allSettled(tasks.map((task) => task()));
+  return summarizeMutationResults(results);
+};
+
+const buildNodeCreatePayload = ({
+  stageOption,
+  batchDescriptor,
+  nodeName,
+  orderNo,
+  planStart,
+  planEnd,
+  executorIds
+}) => ({
+  project_code: normalizeLabel(currentProject.value.projectCode),
+  project_name: normalizeLabel(currentProject.value.projectName),
+  project_type: normalizeLabel(currentProject.value.projectType),
+  batch_no: batchDescriptor?.batchNo ?? '',
+  batch_name: batchDescriptor?.batchName ?? '',
+  main_stage: stageOption?.label || '',
+  main_stage_order: stageOption?.order ?? '',
+  project_stage: nodeName,
+  project_stage_order: orderNo,
+  executor: executorIds,
+  plan_time: planStart || '',
+  plan_finishtime: planEnd || '',
+  status: '未完成',
+  warning_level: '正常',
+  actual_finish: '',
+  site_upload: [],
+  execution_note: '',
+  overdue_reason: ''
+});
+
 // 拉取进度数据
 const loadProgressRecords = async (search = '') => {
   loading.value = true;
@@ -1268,6 +1723,141 @@ const loadProgressRecords = async (search = '') => {
 // 搜索项目进度
 const handleSearch = async () => {
   await loadProgressRecords(searchQuery.value.trim());
+};
+
+const openCreateNodeDialog = (row = null) => {
+  if (!currentProject.value.records.length || !currentBatchDescriptor.value) {
+    ElMessage.warning('当前项目暂无可新增节点的数据');
+    return;
+  }
+  if (!stageOptions.value.length) {
+    ElMessage.warning('当前项目暂无可用主阶段');
+    return;
+  }
+
+  const preferredStage =
+    (row && buildStageOptionFromRecord(row)) || stageOptions.value[0] || null;
+  if (!preferredStage) {
+    ElMessage.warning('当前项目暂无可用主阶段');
+    return;
+  }
+
+  const stageRecords = getStageNodeRecords({
+    stageOption: preferredStage,
+    batchKey: currentBatchDescriptor.value.key
+  });
+  const defaultOrder =
+    row && canManageNode(row)
+      ? Math.min(resolveNodePosition(row) + 1, stageRecords.length + 1)
+      : stageRecords.length + 1;
+
+  createNodeForm.value = {
+    ...buildEmptyCreateNodeForm(),
+    stageKey: preferredStage.key,
+    orderNo: defaultOrder
+  };
+  createNodeDialogVisible.value = true;
+  if (!members.value.length) {
+    loadMembers();
+  }
+};
+
+const handleCreateNode = async () => {
+  const stageOption = createNodeStageOption.value;
+  const nodeName = normalizeLabel(createNodeForm.value.nodeName);
+  const orderNo = parsePositiveInt(createNodeForm.value.orderNo);
+  const targetBatches = getTargetBatchDescriptors(createNodeForm.value.syncAllBatches);
+  const executorIds = normalizeIdList(createNodeForm.value.executorIds);
+  const maxOrder = createNodeOrderMax.value;
+
+  if (!stageOption) {
+    ElMessage.warning('请选择主阶段');
+    return;
+  }
+  if (!nodeName) {
+    ElMessage.warning('请输入节点名称');
+    return;
+  }
+  if (orderNo === null || orderNo > maxOrder) {
+    ElMessage.warning(`插入序号必须在 1 - ${maxOrder} 之间`);
+    return;
+  }
+  if (!targetBatches.length) {
+    ElMessage.warning('当前没有可操作的批次');
+    return;
+  }
+
+  creatingNode.value = true;
+  let createdCount = 0;
+  let reorderedCount = 0;
+  let failedBatchCount = 0;
+
+  try {
+    for (const batch of targetBatches) {
+      const stageRecords = getStageNodeRecords({
+        stageOption,
+        batchKey: batch.key
+      });
+      if (orderNo > stageRecords.length + 1) {
+        failedBatchCount += 1;
+        continue;
+      }
+
+      const reorderedRecords = [...stageRecords];
+      reorderedRecords.splice(orderNo - 1, 0, null);
+      const assignments = reorderedRecords
+        .map((item, index) => (item ? { record: item, orderNo: index + 1 } : null))
+        .filter(Boolean);
+
+      const orderSummary = await applyStageOrderAssignments(assignments);
+      reorderedCount += orderSummary.successCount;
+      if (orderSummary.failedCount > 0) {
+        failedBatchCount += 1;
+        continue;
+      }
+
+      const result = await api.createProjectProgress(
+        buildNodeCreatePayload({
+          stageOption,
+          batchDescriptor: batch,
+          nodeName,
+          orderNo,
+          planStart: normalizeLabel(createNodeForm.value.planStart),
+          planEnd: normalizeLabel(createNodeForm.value.planEnd),
+          executorIds
+        })
+      );
+
+      if (result?.code === 200) {
+        createdCount += 1;
+      } else {
+        failedBatchCount += 1;
+      }
+    }
+
+    if (!createdCount) {
+      ElMessage.error('新增节点失败');
+      return;
+    }
+
+    if (failedBatchCount > 0) {
+      ElMessage.warning(
+        `新增节点完成：成功新增 ${createdCount} 个批次节点，重排 ${reorderedCount} 条，失败 ${failedBatchCount} 个批次`
+      );
+    } else {
+      ElMessage.success(
+        `新增节点成功：成功新增 ${createdCount} 个批次节点，重排 ${reorderedCount} 条`
+      );
+    }
+
+    createNodeDialogVisible.value = false;
+    await loadProgressRecords(searchQuery.value.trim());
+  } catch (error) {
+    console.error('新增节点失败：', error);
+    ElMessage.error('新增节点失败');
+  } finally {
+    creatingNode.value = false;
+  }
 };
 
 const handleBatchCardClick = (batchKey) => {
@@ -1489,6 +2079,46 @@ const handleEditBatch = async () => {
   }
 };
 
+watch(createNodeDialogVisible, (visible) => {
+  if (visible) return;
+  createNodeForm.value = buildEmptyCreateNodeForm();
+});
+
+watch(
+  () => [createNodeDialogVisible.value, createNodeForm.value.stageKey, createNodeForm.value.syncAllBatches],
+  ([visible]) => {
+    if (!visible) return;
+    const maxOrder = createNodeOrderMax.value;
+    const currentOrder = parsePositiveInt(createNodeForm.value.orderNo);
+    if (currentOrder === null || currentOrder > maxOrder) {
+      createNodeForm.value.orderNo = maxOrder;
+    }
+  }
+);
+
+watch(editDialogVisible, (visible) => {
+  if (visible) return;
+  editRow.value = null;
+  editForm.value = buildEmptyEditForm();
+  originalExecutorIds.value = [];
+  originalPlanRange.value = {
+    planStart: '',
+    planEnd: ''
+  };
+});
+
+watch(
+  () => [editDialogVisible.value, editNodeOrderMax.value],
+  ([visible]) => {
+    if (!visible) return;
+    const maxOrder = editNodeOrderMax.value;
+    const currentOrder = parsePositiveInt(editForm.value.orderNo);
+    if (currentOrder === null || currentOrder > maxOrder) {
+      editForm.value.orderNo = maxOrder;
+    }
+  }
+);
+
 watch(createBatchDialogVisible, (visible) => {
   if (visible) return;
   createBatchForm.value = {
@@ -1551,6 +2181,66 @@ const downloadAttachment = (item) => {
   document.body.removeChild(link);
 };
 
+const handleDeleteNode = async (row) => {
+  if (!canManageNode(row)) {
+    ElMessage.warning('仅支持删除具体节点');
+    return;
+  }
+
+  try {
+    await ElMessageBox.confirm(
+      `删除节点“${row.nodeLabel || row.name}”后，将重排当前批次该主阶段下的后续序号，是否继续？`,
+      '删除节点',
+      {
+        type: 'warning',
+        confirmButtonText: '确定删除',
+        cancelButtonText: '取消'
+      }
+    );
+  } catch {
+    return;
+  }
+
+  const stageOption = buildStageOptionFromRecord(row);
+  const batchKey = row.batchKey || currentBatchDescriptor.value?.key || '';
+  if (!stageOption || !batchKey || !row.recordId) {
+    ElMessage.error('当前节点缺少主阶段或批次信息');
+    return;
+  }
+
+  try {
+    const deleteResult = await api.deleteProjectProgress(row.recordId);
+    if (deleteResult?.code !== 200) {
+      ElMessage.error(deleteResult?.msg || '删除失败');
+      return;
+    }
+
+    const remainingRecords = getStageNodeRecords({
+      stageOption,
+      batchKey,
+      excludeRecordId: row.recordId
+    });
+    const assignments = remainingRecords.map((record, index) => ({
+      record,
+      orderNo: index + 1
+    }));
+    const summary = await applyStageOrderAssignments(assignments);
+
+    if (summary.failedCount > 0) {
+      ElMessage.warning(
+        `节点删除完成：已删除节点，序号重排成功 ${summary.successCount} 条，失败 ${summary.failedCount} 条`
+      );
+    } else {
+      ElMessage.success('节点删除成功');
+    }
+
+    await loadProgressRecords(searchQuery.value.trim());
+  } catch (error) {
+    console.error('删除节点失败：', error);
+    ElMessage.error('删除节点失败');
+  }
+};
+
 // 打开详情弹窗
 const openDetailDialog = (row) => {
   if (!row || row.isGroup) return;
@@ -1562,13 +2252,24 @@ const openDetailDialog = (row) => {
 
 // 打开编辑弹窗
 const openEditDialog = async (row) => {
-  if (!row || row.isGroup) return;
+  if (!canManageNode(row)) {
+    ElMessage.warning('仅支持编辑具体节点');
+    return;
+  }
   editRow.value = row;
   const initialExecutorIds = getExecutorIds(row.executorRaw);
+  const initialPlanStart = row.planStartRaw ? formatDate(row.planStartRaw) : row.planStart || '';
+  const initialPlanEnd = row.planEndRaw ? formatDate(row.planEndRaw) : row.planEnd || '';
   editForm.value = {
-    planStart: row.planStartRaw ? formatDate(row.planStartRaw) : row.planStart || '',
-    planEnd: row.planEndRaw ? formatDate(row.planEndRaw) : row.planEnd || '',
+    nodeName: row.nodeLabel || row.name || '',
+    orderNo: resolveNodePosition(row),
+    planStart: initialPlanStart,
+    planEnd: initialPlanEnd,
     executorIds: initialExecutorIds
+  };
+  originalPlanRange.value = {
+    planStart: initialPlanStart,
+    planEnd: initialPlanEnd
   };
   originalExecutorIds.value = [...initialExecutorIds];
   editDialogVisible.value = true;
@@ -1591,40 +2292,94 @@ const openEditDialog = async (row) => {
 
 // 保存节点编辑
 const handleSaveEdit = async () => {
-  if (!editRow.value?.recordId) {
+  if (!canManageNode(editRow.value)) {
     ElMessage.error('无法编辑：缺少记录ID');
     return;
   }
+
+  const stageOption = editNodeStageOption.value;
+  const batchKey = editRow.value.batchKey || currentBatchDescriptor.value?.key || '';
+  if (!stageOption || !batchKey) {
+    ElMessage.error('当前节点缺少主阶段或批次信息');
+    return;
+  }
+
+  const stageRecords = getStageNodeRecords({
+    stageOption,
+    batchKey
+  });
+  const currentRecord = stageRecords.find(
+    (record) => getProgressRecordId(record) === editRow.value.recordId
+  );
+  if (!currentRecord) {
+    ElMessage.error('未找到要编辑的节点记录');
+    return;
+  }
+
+  const nodeName = normalizeLabel(editForm.value.nodeName);
+  const orderNo = parsePositiveInt(editForm.value.orderNo);
+  if (!nodeName) {
+    ElMessage.warning('请输入节点名称');
+    return;
+  }
+  if (orderNo === null || orderNo > editNodeOrderMax.value) {
+    ElMessage.warning(`节点序号必须在 1 - ${editNodeOrderMax.value} 之间`);
+    return;
+  }
+
   savingEdit.value = true;
   try {
+    const nextPlanStart = normalizeLabel(editForm.value.planStart);
+    const nextPlanEnd = normalizeLabel(editForm.value.planEnd);
     const payload = {};
-    if (editForm.value.planStart) {
-      payload.plan_time = updatePlanTimeValue(
-        editRow.value.rawPlanTime,
-        editForm.value.planStart,
-        editRow.value.planEndRaw
-      );
+    const currentName = normalizeLabel(editRow.value.nodeLabel || editRow.value.name);
+
+    if (nodeName !== currentName) {
+      payload.project_stage = nodeName;
     }
-    if (editForm.value.planEnd || editRow.value.planEndRaw) {
-      payload.plan_finishtime = editForm.value.planEnd || '';
+
+    if (nextPlanStart !== originalPlanRange.value.planStart) {
+      payload.plan_time = nextPlanStart
+        ? updatePlanTimeValue(editRow.value.rawPlanTime, nextPlanStart, nextPlanEnd || editRow.value.planEndRaw)
+        : '';
     }
+    if (nextPlanEnd !== originalPlanRange.value.planEnd) {
+      payload.plan_finishtime = nextPlanEnd || '';
+    }
+
     const currentExecutorIds = normalizeIdList(editForm.value.executorIds);
     const originalIds = normalizeIdList(originalExecutorIds.value);
     if (JSON.stringify(currentExecutorIds) !== JSON.stringify(originalIds)) {
       payload.executor = currentExecutorIds;
     }
-    if (Object.keys(payload).length === 0) {
+
+    const reorderedRecords = stageRecords.filter(
+      (record) => getProgressRecordId(record) !== editRow.value.recordId
+    );
+    reorderedRecords.splice(orderNo - 1, 0, currentRecord);
+    const assignments = reorderedRecords.map((record, index) => ({
+      record,
+      orderNo: index + 1
+    }));
+    const currentPosition = resolveNodePosition(editRow.value);
+    if (Object.keys(payload).length === 0 && currentPosition === orderNo) {
       ElMessage.warning('没有可更新的内容');
       savingEdit.value = false;
       return;
     }
-    const result = await api.updateProjectProgress(editRow.value.recordId, payload);
-    if (result?.code === 200) {
+
+    const extraPayloadMap = new Map([[editRow.value.recordId, payload]]);
+    const summary = await applyStageOrderAssignments(assignments, extraPayloadMap);
+    if (summary.failedCount === 0) {
       ElMessage.success('更新成功');
       editDialogVisible.value = false;
       await loadProgressRecords(searchQuery.value.trim());
+    } else if (summary.successCount > 0) {
+      ElMessage.warning(`节点编辑已部分完成：成功 ${summary.successCount} 条，失败 ${summary.failedCount} 条`);
+      editDialogVisible.value = false;
+      await loadProgressRecords(searchQuery.value.trim());
     } else {
-      ElMessage.error(result?.msg || '更新失败');
+      ElMessage.error('更新失败');
     }
   } catch (error) {
     console.error('更新失败：', error);
@@ -2024,9 +2779,43 @@ onMounted(async () => {
 }
 
 .action-buttons {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  justify-items: center;
+  align-items: center;
+  gap: 1px 4px;
+  width: 100%;
+}
+
+.action-link {
+  margin: 0 !important;
+  min-width: auto;
+  padding: 0;
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.action-link--danger {
+  color: #f56c6c;
+}
+
+.dialog-hint {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #909399;
+}
+
+.dialog-switch-wrap {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.dialog-switch-label {
+  font-size: 13px;
+  color: #606266;
 }
 
 .detail-body {
