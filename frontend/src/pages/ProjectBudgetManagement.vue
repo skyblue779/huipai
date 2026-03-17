@@ -75,7 +75,8 @@
           <!-- 核心功能区 -->
           <div class="content-panel" style="grid-column: span 5;">
             <div style="position: relative;">
-              <div style="position: absolute; right: 0; top: 0; z-index: 1;">
+            <div style="position: absolute; right: 0; top: 0; z-index: 1;">
+                <el-button :icon="Plus" @click="openBudgetItemDialog()">新增成本项</el-button>
                 <el-button type="primary" :icon="Plus" @click="handleEntryCost">录入实际成本</el-button>
                 <!-- <el-button :icon="Download">导出报表</el-button> -->
               </div>
@@ -92,6 +93,12 @@
                   >
                     <el-table-column prop="centerName" label="成本中心" width="150"></el-table-column>
                     <el-table-column prop="item" label="成本项" width="150"></el-table-column>
+                    <el-table-column label="序号" width="80" align="center">
+                      <template #default="scope">
+                        <span v-if="!scope.row._isSummary">{{ scope.row._projectStageOrder ?? '--' }}</span>
+                        <span v-else>--</span>
+                      </template>
+                    </el-table-column>
                     <el-table-column prop="standard" label="预算标准" width="150" align="right">
                       <template #default="scope">¥ {{ formatMoney(scope.row.standard) }}</template>
                     </el-table-column>
@@ -119,9 +126,29 @@
                         <el-tag :type="scope.row.tagType">{{ scope.row.tagName }}</el-tag>
                       </template>
                     </el-table-column>
-                    <el-table-column label="操作" width="120" align="center">
+                    <el-table-column label="操作" width="240" align="center">
                       <template #default="scope">
-                        <el-button link type="primary" size="small" @click="handleViewDetails(scope.row)">详情</el-button>
+                        <div class="table-actions">
+                          <el-button link type="primary" size="small" @click="handleViewDetails(scope.row)">详情</el-button>
+                          <el-button
+                            v-if="canManageBudgetRow(scope.row)"
+                            link
+                            type="primary"
+                            size="small"
+                            @click="openBudgetItemDialog(scope.row, 'edit')"
+                          >
+                            编辑
+                          </el-button>
+                          <el-button
+                            v-if="canManageBudgetRow(scope.row)"
+                            link
+                            type="danger"
+                            size="small"
+                            @click="handleDeleteBudgetItem(scope.row)"
+                          >
+                            删除
+                          </el-button>
+                        </div>
                       </template>
                     </el-table-column>
                   </el-table>
@@ -264,6 +291,74 @@
       </template>
     </el-dialog>
 
+    <el-dialog
+      v-model="budgetItemDialogVisible"
+      :title="budgetItemDialogMode === 'create' ? '新增成本项' : '编辑成本项'"
+      width="520px"
+    >
+      <el-form :model="budgetItemForm" label-width="100px">
+        <el-form-item label="成本中心">
+          <el-select
+            v-model="budgetItemForm.centerName"
+            filterable
+            allow-create
+            default-first-option
+            placeholder="请选择或输入成本中心"
+            style="width: 100%"
+          >
+            <el-option
+              v-for="item in costCenterOptions"
+              :key="item"
+              :label="item"
+              :value="item"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="成本项">
+          <el-select
+            v-model="budgetItemForm.costItem"
+            filterable
+            allow-create
+            default-first-option
+            placeholder="请选择或输入成本项"
+            style="width: 100%"
+          >
+            <el-option
+              v-for="item in budgetItemCostOptions"
+              :key="item"
+              :label="item"
+              :value="item"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item :label="budgetItemDialogMode === 'create' ? '插入序号' : '成本项序号'">
+          <el-input-number
+            v-model="budgetItemForm.orderNo"
+            :min="1"
+            :max="Math.max(budgetItemOrderMax, 1)"
+            :step="1"
+            :precision="0"
+            controls-position="right"
+            style="width: 100%"
+          />
+          <div class="dialog-hint">{{ budgetItemOrderHint }}</div>
+        </el-form-item>
+        <el-form-item label="预算标准">
+          <el-input v-model="budgetItemForm.budgetStandard" type="number" min="0">
+            <template #append>元</template>
+          </el-input>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="budgetItemDialogVisible = false">取消</el-button>
+          <el-button type="primary" :loading="budgetItemSubmitting" @click="submitBudgetItem">
+            {{ budgetItemDialogMode === 'create' ? '确认新增' : '保存修改' }}
+          </el-button>
+        </span>
+      </template>
+    </el-dialog>
+
     <!-- 成本明细弹窗 -->
     <el-dialog v-model="detailsDialogVisible" title="成本明细" width="700px">
       <div v-if="currentDetailItem">
@@ -308,7 +403,7 @@
 <script setup>
 import { ref, reactive, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { Plus, Download } from '@element-plus/icons-vue'
-import { ElMessage, ElNotification, ElConfigProvider } from 'element-plus'
+import { ElMessage, ElNotification, ElConfigProvider, ElMessageBox } from 'element-plus'
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
 import * as echarts from 'echarts'
 import api from '../api/client'
@@ -319,6 +414,10 @@ const projectOptions = ref([])
 const currentProject = ref('')
 const activeTab = ref('execution')
 const entryDialogVisible = ref(false)
+const budgetItemDialogVisible = ref(false)
+const budgetItemDialogMode = ref('create')
+const budgetItemSubmitting = ref(false)
+const budgetItemOriginalCenter = ref('')
 const detailsDialogVisible = ref(false)
 const currentDetailItem = ref(null)
 const detailHistoryData = ref([])
@@ -332,6 +431,14 @@ const entryForm = reactive({
   costItem: '',
   amount: '',
   remark: ''
+})
+
+const budgetItemForm = reactive({
+  recordId: '',
+  centerName: '',
+  costItem: '',
+  orderNo: 1,
+  budgetStandard: ''
 })
 
 // 引用图表 DOM 元素
@@ -474,6 +581,33 @@ const costItemOptions = computed(() => {
     .map(([item]) => item)
 })
 
+const budgetItemCostOptions = computed(() => {
+  const map = new Map()
+  const selectedCenter = normalizeLabel(budgetItemForm.centerName)
+  if (!selectedCenter) return []
+  filteredBudgetRecords.value.forEach((record) => {
+    const center = normalizeLabel(record.cost_center)
+    if (center !== selectedCenter) return
+    const item = normalizeLabel(record.cost_item)
+    if (!item) return
+    const mainOrder = normalizeOrderValue(record.main_stage_order)
+    const stageOrder = normalizeOrderValue(record.project_stage_order)
+    const current = map.get(item) || { mainOrder: null, stageOrder: null }
+    current.mainOrder = mergeOrderValue(current.mainOrder, mainOrder)
+    current.stageOrder = mergeOrderValue(current.stageOrder, stageOrder)
+    map.set(item, current)
+  })
+  return Array.from(map.entries())
+    .sort((a, b) => {
+      const mainCompare = compareOrderValue(a[1].mainOrder, b[1].mainOrder)
+      if (mainCompare !== 0) return mainCompare
+      const stageCompare = compareOrderValue(a[1].stageOrder, b[1].stageOrder)
+      if (stageCompare !== 0) return stageCompare
+      return a[0].localeCompare(b[0], 'zh')
+    })
+    .map(([item]) => item)
+})
+
 // 费用类型下拉（固定选项）
 const costTypeOptions = ref(['材料费用', '人工费用', '其他费用'])
 
@@ -487,6 +621,35 @@ watch(
   }
 )
 
+watch(
+  () => budgetItemForm.centerName,
+  (value, oldValue) => {
+    if (value !== oldValue) {
+      budgetItemForm.costItem = ''
+    }
+  }
+)
+
+watch(budgetItemDialogVisible, (visible) => {
+  if (!visible) {
+    resetBudgetItemForm()
+    budgetItemDialogMode.value = 'create'
+    budgetItemOriginalCenter.value = ''
+  }
+})
+
+watch(
+  () => [budgetItemDialogVisible.value, budgetItemForm.centerName, budgetItemDialogMode.value],
+  ([visible]) => {
+    if (!visible) return
+    const maxOrder = budgetItemOrderMax.value
+    const currentOrder = parsePositiveInt(budgetItemForm.orderNo)
+    if (currentOrder === null || currentOrder > maxOrder) {
+      budgetItemForm.orderNo = maxOrder
+    }
+  }
+)
+
 // 安全转换为数字
 const toNumber = (value) => {
   if (value === null || value === undefined || value === '') return 0
@@ -494,6 +657,35 @@ const toNumber = (value) => {
   const cleaned = String(value).replace(/,/g, '')
   const numeric = Number(cleaned)
   return Number.isFinite(numeric) ? numeric : 0
+}
+
+const parsePositiveInt = (value) => {
+  if (value === null || value === undefined || value === '') return null
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric)) return null
+  const asInt = Math.trunc(numeric)
+  return asInt > 0 ? asInt : null
+}
+
+const getBudgetRecordId = (record) => String(record?._id || record?.id || '')
+
+const compareBudgetItemPosition = (a, b) => {
+  const mainCompare = compareOrderValue(
+    normalizeOrderValue(a?.main_stage_order),
+    normalizeOrderValue(b?.main_stage_order)
+  )
+  if (mainCompare !== 0) return mainCompare
+
+  const stageCompare = compareOrderValue(
+    normalizeOrderValue(a?.project_stage_order),
+    normalizeOrderValue(b?.project_stage_order)
+  )
+  if (stageCompare !== 0) return stageCompare
+
+  const nameCompare = normalizeLabel(a?.cost_item).localeCompare(normalizeLabel(b?.cost_item), 'zh')
+  if (nameCompare !== 0) return nameCompare
+
+  return getBudgetRecordId(a).localeCompare(getBudgetRecordId(b), 'zh')
 }
 
 const COST_TYPE_SUBFORM_VALUE_KEY = '_widget_1772415164746'
@@ -647,9 +839,11 @@ const buildBudgetData = (records) => {
       totalStandard += entry.standard
       totalActual += entry.actual
       const statusMeta = buildStatusMeta(entry.actual, entry.standard)
+      const primaryRecord = entry.records.length === 1 ? entry.records[0] : null
       children.push({
         id: `item-${rowIndex++}`,
         centerName: '',
+        centerLabel: center,
         item,
         costType: entry.costType || '',
         standard: entry.standard,
@@ -660,7 +854,13 @@ const buildBudgetData = (records) => {
         progressColor: statusMeta.progressColor,
         tagType: statusMeta.tagType,
         tagName: statusMeta.tagName,
-        _records: entry.records
+        _records: entry.records,
+        _record: primaryRecord,
+        _recordId: primaryRecord?._id || primaryRecord?.id || '',
+        _recordCount: entry.records.length,
+        _mainStageOrder: entry.mainOrder,
+        _projectStageOrder: entry.stageOrder,
+        _isSummary: false
       })
     })
 
@@ -678,7 +878,8 @@ const buildBudgetData = (records) => {
       tagType: totalStatus.tagType,
       tagName: totalStatus.tagName,
       children,
-      _records: children.flatMap((child) => child._records || [])
+      _records: children.flatMap((child) => child._records || []),
+      _isSummary: true
     })
   })
 
@@ -791,6 +992,210 @@ const refreshViewData = () => {
   }
 }
 
+const resetBudgetItemForm = () => {
+  budgetItemForm.recordId = ''
+  budgetItemForm.centerName = ''
+  budgetItemForm.costItem = ''
+  budgetItemForm.orderNo = 1
+  budgetItemForm.budgetStandard = ''
+}
+
+const canManageBudgetRow = (row) =>
+  Boolean(row && !row._isSummary && row._record && row._recordId && row._recordCount === 1)
+
+const findFilteredBudgetRecordById = (recordId) =>
+  filteredBudgetRecords.value.find((record) => getBudgetRecordId(record) === String(recordId))
+
+const getCenterBudgetRecords = (centerName, excludeRecordId = '') =>
+  filteredBudgetRecords.value
+    .filter((record) => {
+      if (excludeRecordId && getBudgetRecordId(record) === String(excludeRecordId)) return false
+      return normalizeLabel(record.cost_center) === normalizeLabel(centerName)
+    })
+    .sort(compareBudgetItemPosition)
+
+const resolveBudgetRecordPosition = (record) => {
+  if (!record) return 1
+  const centerName = normalizeLabel(record.cost_center)
+  const records = getCenterBudgetRecords(centerName)
+  const index = records.findIndex((item) => getBudgetRecordId(item) === getBudgetRecordId(record))
+  return index >= 0 ? index + 1 : parsePositiveInt(record.project_stage_order) || 1
+}
+
+const summarizeMutationResults = (results) => {
+  const successCount = results.filter(
+    (item) => item.status === 'fulfilled' && item.value?.code === 200
+  ).length
+  return {
+    total: results.length,
+    successCount,
+    failedCount: results.length - successCount
+  }
+}
+
+const applyBudgetOrderAssignments = async (assignments, extraPayloadMap = new Map()) => {
+  const tasks = assignments.reduce((list, { record, orderNo }) => {
+    const recordId = getBudgetRecordId(record)
+    if (!recordId) return list
+    const payload = { ...(extraPayloadMap.get(recordId) || {}) }
+    const currentOrder = parsePositiveInt(record.project_stage_order)
+    if (currentOrder !== orderNo) {
+      payload.project_stage_order = orderNo
+    }
+    if (!Object.keys(payload).length) return list
+    list.push(() => api.updateProjectBudget(recordId, payload))
+    return list
+  }, [])
+
+  if (!tasks.length) {
+    return {
+      total: 0,
+      successCount: 0,
+      failedCount: 0
+    }
+  }
+
+  const results = await Promise.allSettled(tasks.map((task) => task()))
+  return summarizeMutationResults(results)
+}
+
+const budgetItemOrderMax = computed(() => {
+  const centerName = normalizeLabel(budgetItemForm.centerName)
+  if (!centerName) return 1
+  const excludeRecordId =
+    budgetItemDialogMode.value === 'edit' &&
+    centerName === normalizeLabel(budgetItemOriginalCenter.value)
+      ? budgetItemForm.recordId
+      : ''
+  const siblingCount = getCenterBudgetRecords(centerName, excludeRecordId).length
+  return Math.max(1, siblingCount + (budgetItemDialogMode.value === 'create' ? 1 : 1))
+})
+
+const budgetItemOrderHint = computed(() => {
+  const centerName = normalizeLabel(budgetItemForm.centerName)
+  if (!centerName) return '请先选择成本中心'
+  const excludeRecordId =
+    budgetItemDialogMode.value === 'edit' &&
+    centerName === normalizeLabel(budgetItemOriginalCenter.value)
+      ? budgetItemForm.recordId
+      : ''
+  const siblingCount = getCenterBudgetRecords(centerName, excludeRecordId).length
+  if (budgetItemDialogMode.value === 'create') {
+    return `当前成本中心共有 ${siblingCount} 个成本项，可插入到第 1 - ${budgetItemOrderMax.value} 位`
+  }
+  return `保存后会按新的序号重排当前成本中心下的成本项，范围 1 - ${budgetItemOrderMax.value}`
+})
+
+const hasDuplicatedBudgetItem = ({ centerName, costItem, excludeRecordId = '' }) =>
+  filteredBudgetRecords.value.some((record) => {
+    const recordId = String(record._id || record.id || '')
+    if (excludeRecordId && recordId === String(excludeRecordId)) return false
+    return (
+      normalizeLabel(record.cost_center) === normalizeLabel(centerName) &&
+      normalizeLabel(record.cost_item) === normalizeLabel(costItem)
+    )
+  })
+
+const getCenterOrderMeta = (centerName, excludeRecordId = '') => {
+  const normalizedCenter = normalizeLabel(centerName)
+  const centerRecords = filteredBudgetRecords.value.filter((record) => {
+    const recordId = String(record._id || record.id || '')
+    if (excludeRecordId && recordId === String(excludeRecordId)) return false
+    return normalizeLabel(record.cost_center) === normalizedCenter
+  })
+  if (!centerRecords.length) {
+    return null
+  }
+  const mainStageOrder = centerRecords.reduce(
+    (current, record) => mergeOrderValue(current, normalizeOrderValue(record.main_stage_order)),
+    null
+  )
+  const projectStageOrder = centerRecords.reduce((current, record) => {
+    const order = normalizeOrderValue(record.project_stage_order)
+    if (order === null || order === undefined) return current
+    if (current === null || current === undefined) return order
+    return compareOrderValue(order, current) > 0 ? order : current
+  }, null)
+  return {
+    mainStageOrder,
+    nextProjectStageOrder:
+      typeof projectStageOrder === 'number' && Number.isFinite(projectStageOrder)
+        ? projectStageOrder + 1
+        : 1
+  }
+}
+
+const getNextMainStageOrder = (excludeRecordId = '') => {
+  const maxOrder = filteredBudgetRecords.value.reduce((current, record) => {
+    const recordId = String(record._id || record.id || '')
+    if (excludeRecordId && recordId === String(excludeRecordId)) return current
+    const order = normalizeOrderValue(record.main_stage_order)
+    if (typeof order !== 'number' || !Number.isFinite(order)) return current
+    return Math.max(current, order)
+  }, 0)
+  return maxOrder + 1
+}
+
+const resolveCreateBudgetOrders = (centerName) => {
+  const centerMeta = getCenterOrderMeta(centerName)
+  if (centerMeta) {
+    return {
+      mainStageOrder: centerMeta.mainStageOrder ?? '',
+      projectStageOrder: centerMeta.nextProjectStageOrder ?? 1
+    }
+  }
+  return {
+    mainStageOrder: getNextMainStageOrder(),
+    projectStageOrder: 1
+  }
+}
+
+const openBudgetItemDialog = (row = null, mode = 'create') => {
+  if (!currentProject.value) {
+    ElMessage.warning('请先选择项目')
+    return
+  }
+
+  if (row && !row._isSummary && !canManageBudgetRow(row)) {
+    ElMessage.warning('当前成本项存在重复记录，暂不支持直接编辑')
+    return
+  }
+
+  resetBudgetItemForm()
+  budgetItemOriginalCenter.value = ''
+  if (row?._isSummary) {
+    budgetItemDialogMode.value = 'create'
+    budgetItemForm.centerName = normalizeLabel(row.centerName)
+    budgetItemForm.orderNo = getCenterBudgetRecords(budgetItemForm.centerName).length + 1
+  } else if (row) {
+    const record = row._record || findFilteredBudgetRecordById(row._recordId)
+    const centerName = row.centerLabel || normalizeLabel(record?.cost_center)
+    if (mode === 'edit') {
+      budgetItemDialogMode.value = 'edit'
+      budgetItemOriginalCenter.value = centerName
+      budgetItemForm.recordId = row._recordId
+      budgetItemForm.centerName = centerName
+      budgetItemForm.costItem = row.item || normalizeLabel(record?.cost_item)
+      budgetItemForm.orderNo = resolveBudgetRecordPosition(record)
+      budgetItemForm.budgetStandard = String(toNumber(record?.budget_standard))
+    } else {
+      budgetItemDialogMode.value = 'create'
+      budgetItemForm.centerName = centerName
+      budgetItemForm.orderNo = Math.min(
+        resolveBudgetRecordPosition(record) + 1,
+        getCenterBudgetRecords(centerName).length + 1
+      )
+    }
+  } else {
+    budgetItemDialogMode.value = 'create'
+    budgetItemForm.centerName = costCenterOptions.value[0] || ''
+    budgetItemForm.orderNo = budgetItemForm.centerName
+      ? getCenterBudgetRecords(budgetItemForm.centerName).length + 1
+      : 1
+  }
+  budgetItemDialogVisible.value = true
+}
+
 // 从后端加载预算记录并初始化项目选择
 const loadBudgetRecords = async () => {
   loading.value = true
@@ -869,6 +1274,254 @@ const resetEntryForm = () => {
   entryForm.costItem = ''
   entryForm.amount = ''
   entryForm.remark = ''
+}
+
+const submitBudgetItem = async () => {
+  if (!currentProject.value) {
+    ElMessage.warning('请先选择项目')
+    return
+  }
+
+  const centerName = normalizeLabel(budgetItemForm.centerName)
+  const costItem = normalizeLabel(budgetItemForm.costItem)
+  const budgetStandard = toNumber(budgetItemForm.budgetStandard)
+  const recordId = normalizeLabel(budgetItemForm.recordId)
+  const orderNo = parsePositiveInt(budgetItemForm.orderNo)
+
+  if (!centerName) {
+    ElMessage.warning('请输入成本中心')
+    return
+  }
+  if (!costItem) {
+    ElMessage.warning('请输入成本项')
+    return
+  }
+  if (budgetStandard < 0) {
+    ElMessage.warning('预算标准不能小于0')
+    return
+  }
+  if (orderNo === null || orderNo > budgetItemOrderMax.value) {
+    ElMessage.warning(`序号必须在 1 - ${budgetItemOrderMax.value} 之间`)
+    return
+  }
+  if (hasDuplicatedBudgetItem({ centerName, costItem, excludeRecordId: recordId })) {
+    ElMessage.warning('该成本中心下已存在同名成本项')
+    return
+  }
+
+  budgetItemSubmitting.value = true
+  try {
+    if (budgetItemDialogMode.value === 'create') {
+      const existingCenterRecords = getCenterBudgetRecords(centerName)
+      const orderMeta = resolveCreateBudgetOrders(centerName)
+      const tempOrder = existingCenterRecords.length + 1
+      const payload = {
+        project_code: currentProjectMeta.value.code || '',
+        project_name: currentProjectMeta.value.name || '',
+        project_type: currentProjectMeta.value.type || '',
+        cost_center: centerName,
+        cost_item: costItem,
+        main_stage_order: orderMeta.mainStageOrder,
+        project_stage_order: tempOrder,
+        budget_standard: budgetStandard,
+        actual_total: 0,
+        status: resolveBudgetStatus(0, budgetStandard),
+        cost_details: []
+      }
+      const result = await api.createProjectBudget(payload)
+      if (result?.code !== 200) {
+        ElMessage.error(result?.msg || '新增成本项失败')
+        return
+      }
+      if (orderNo !== tempOrder) {
+        let createdRecord = {
+          ...payload,
+          ...(result?.data || {})
+        }
+        if (!getBudgetRecordId(createdRecord)) {
+          await loadBudgetRecords()
+          createdRecord =
+            filteredBudgetRecords.value.find(
+              (record) =>
+                normalizeLabel(record.cost_center) === centerName &&
+                normalizeLabel(record.cost_item) === costItem
+            ) || createdRecord
+        }
+        if (!getBudgetRecordId(createdRecord)) {
+          ElMessage.warning('成本项已新增，但未能自动重排，请刷新后检查')
+          budgetItemDialogVisible.value = false
+          resetBudgetItemForm()
+          return
+        }
+        const reorderedRecords = [...existingCenterRecords]
+        reorderedRecords.splice(orderNo - 1, 0, createdRecord)
+        const assignments = reorderedRecords.map((record, index) => ({
+          record,
+          orderNo: index + 1
+        }))
+        const reorderSummary = await applyBudgetOrderAssignments(assignments)
+        if (reorderSummary.failedCount > 0) {
+          ElMessage.warning(
+            `成本项已新增，但序号重排仅成功 ${reorderSummary.successCount} 条，失败 ${reorderSummary.failedCount} 条`
+          )
+          await loadBudgetRecords()
+          budgetItemDialogVisible.value = false
+          resetBudgetItemForm()
+          return
+        }
+      }
+      ElMessage.success('新增成本项成功')
+    } else {
+      const record = findFilteredBudgetRecordById(recordId)
+      if (!record?._id && !record?.id) {
+        ElMessage.error('未找到要编辑的成本项')
+        return
+      }
+      const nextDetails = Array.isArray(record.cost_details)
+        ? record.cost_details.map((detail) => ({
+            ...detail,
+            detail_item: costItem
+          }))
+        : []
+      const currentActual = getRecordActual(record)
+      const currentCenter = normalizeLabel(record.cost_center)
+      const payload = {
+        cost_center: centerName,
+        cost_item: costItem,
+        budget_standard: budgetStandard,
+        actual_total: currentActual,
+        status: resolveBudgetStatus(currentActual, budgetStandard),
+        cost_details: nextDetails
+      }
+      if (centerName === currentCenter) {
+        const siblings = getCenterBudgetRecords(centerName, recordId)
+        const reorderedRecords = [...siblings]
+        reorderedRecords.splice(orderNo - 1, 0, record)
+        const assignments = reorderedRecords.map((item, index) => ({
+          record: item,
+          orderNo: index + 1
+        }))
+        const summary = await applyBudgetOrderAssignments(
+          assignments,
+          new Map([[recordId, payload]])
+        )
+        if (summary.failedCount > 0) {
+          ElMessage.error('编辑成本项失败')
+          return
+        }
+      } else {
+        const sourceAssignments = getCenterBudgetRecords(currentCenter, recordId).map((item, index) => ({
+          record: item,
+          orderNo: index + 1
+        }))
+        const sourceSummary = await applyBudgetOrderAssignments(sourceAssignments)
+        if (sourceSummary.failedCount > 0) {
+          ElMessage.error('原成本中心序号重排失败')
+          return
+        }
+
+        const targetMeta = resolveCreateBudgetOrders(centerName)
+        const targetRecords = getCenterBudgetRecords(centerName)
+        const tempOrder = targetRecords.length + 1
+        const movePayload = {
+          ...payload,
+          main_stage_order: targetMeta.mainStageOrder,
+          project_stage_order: tempOrder
+        }
+        const moveResult = await api.updateProjectBudget(record._id || record.id, movePayload)
+        if (moveResult?.code !== 200) {
+          ElMessage.error(moveResult?.msg || '编辑成本项失败')
+          return
+        }
+
+        if (orderNo !== tempOrder) {
+          const movedRecord = {
+            ...record,
+            ...movePayload
+          }
+          const reorderedRecords = [...targetRecords]
+          reorderedRecords.splice(orderNo - 1, 0, movedRecord)
+          const targetSummary = await applyBudgetOrderAssignments(
+            reorderedRecords.map((item, index) => ({
+              record: item,
+              orderNo: index + 1
+            }))
+          )
+          if (targetSummary.failedCount > 0) {
+            ElMessage.warning(
+              `成本项已移动，但目标成本中心序号重排仅成功 ${targetSummary.successCount} 条，失败 ${targetSummary.failedCount} 条`
+            )
+            await loadBudgetRecords()
+            budgetItemDialogVisible.value = false
+            resetBudgetItemForm()
+            return
+          }
+        }
+      }
+      ElMessage.success('成本项已更新')
+    }
+
+    budgetItemDialogVisible.value = false
+    resetBudgetItemForm()
+    await loadBudgetRecords()
+  } catch (error) {
+    console.error('保存成本项失败：', error)
+    ElMessage.error('保存成本项失败')
+  } finally {
+    budgetItemSubmitting.value = false
+  }
+}
+
+const handleDeleteBudgetItem = async (row) => {
+  if (!canManageBudgetRow(row)) {
+    ElMessage.warning('当前成本项存在重复记录，暂不支持直接删除')
+    return
+  }
+
+  const record = row._record
+  const actualAmount = getRecordActual(record)
+  const detailCount = Array.isArray(record?.cost_details) ? record.cost_details.length : 0
+  const confirmMessage =
+    actualAmount > 0 || detailCount > 0
+      ? `成本项“${row.item}”已有 ${detailCount} 条成本记录、实际发生 ¥${formatMoney(actualAmount)}，删除后将一并清除，是否继续？`
+      : `确认删除成本项“${row.item}”？`
+
+  try {
+    await ElMessageBox.confirm(confirmMessage, '删除成本项', {
+      type: 'warning',
+      confirmButtonText: '确定删除',
+      cancelButtonText: '取消'
+    })
+  } catch {
+    return
+  }
+
+  try {
+    const centerName = normalizeLabel(record.cost_center)
+    const result = await api.deleteProjectBudget(row._recordId)
+    if (result?.code !== 200) {
+      ElMessage.error(result?.msg || '删除成本项失败')
+      return
+    }
+    const reorderSummary = await applyBudgetOrderAssignments(
+      getCenterBudgetRecords(centerName, row._recordId).map((item, index) => ({
+        record: item,
+        orderNo: index + 1
+      }))
+    )
+    if (reorderSummary.failedCount > 0) {
+      ElMessage.warning(
+        `成本项已删除，但序号重排仅成功 ${reorderSummary.successCount} 条，失败 ${reorderSummary.failedCount} 条`
+      )
+      await loadBudgetRecords()
+      return
+    }
+    ElMessage.success('成本项已删除')
+    await loadBudgetRecords()
+  } catch (error) {
+    console.error('删除成本项失败：', error)
+    ElMessage.error('删除成本项失败')
+  }
 }
 
 // 提交成本录入并刷新数据
@@ -1239,6 +1892,21 @@ onUnmounted(() => {
   box-shadow: 0 1px 2px 0 rgba(0,0,0,0.05);
   display: flex;
   flex-direction: column;
+}
+
+.table-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.dialog-hint {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #909399;
 }
 
 /* 表格样式微调 - 注意：scoped 样式下修改 element 内部样式需要使用 :deep() */
