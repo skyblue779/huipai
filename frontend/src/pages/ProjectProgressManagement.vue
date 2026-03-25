@@ -157,6 +157,26 @@
               新增批次
             </el-button>
           </div>
+
+        </div>
+                <div v-if="batchCards.length" class="batch-card-panel">
+          <div class="batch-card-header">
+            <div class="batch-card-title">批次列表</div>
+            <div class="batch-card-desc">点击卡片查看对应批次</div>
+          </div>
+          <div class="batch-card-grid">
+            <button
+              v-for="card in batchCards"
+              :key="card.key"
+              type="button"
+              class="batch-card-item"
+              :class="{ 'is-active': card.key === currentBatchKey }"
+              @click="handleBatchCardClick(card.key)"
+            >
+              <div class="batch-card-main">{{ card.label }}</div>
+              <div class="batch-card-sub">{{ card.subLabel }}</div>
+            </button>
+          </div>
         </div>
 
         <el-table
@@ -170,12 +190,12 @@
           :default-expand-all="true"
           :row-class-name="getRowClass"
         >
-          <el-table-column label="主阶段" min-width="180" fixed="left">
+          <el-table-column label="主阶段" min-width="100" fixed="left">
             <template #default="{ row }">
               <span v-if="row.isGroup" class="stage-group-title">{{ row.mainStageLabel || row.name }}</span>
             </template>
           </el-table-column>
-          <el-table-column label="节点名称" min-width="220">
+          <el-table-column label="节点名称" min-width="100">
             <template #default="{ row }">
               <span v-if="row.isGroup" class="stage-node-count">{{ row.nodeCount }} 个节点</span>
               <div v-else class="stage-node-item">
@@ -190,12 +210,12 @@
               <span v-else class="stage-placeholder">--</span>
             </template>
           </el-table-column>
-          <el-table-column label="批次" width="200" align="center">
+          <!-- <el-table-column label="批次" width="200" align="center">
             <template #default="{ row }">
               <span v-if="!row.isGroup">{{ row.batchCardLabel }}</span>
               <span v-else class="stage-placeholder">--</span>
             </template>
-          </el-table-column>
+          </el-table-column> -->
           <el-table-column label="当前状态" width="120" align="center">
             <template #default="{ row }">
               <el-tag v-if="!row.isGroup" :type="getStatusTag(row.status)" effect="dark">
@@ -284,25 +304,6 @@
           </el-table-column>
           </el-table>
 
-        <div v-if="batchCards.length" class="batch-card-panel">
-          <div class="batch-card-header">
-            <div class="batch-card-title">批次列表</div>
-            <div class="batch-card-desc">点击卡片查看对应批次</div>
-          </div>
-          <div class="batch-card-grid">
-            <button
-              v-for="card in batchCards"
-              :key="card.key"
-              type="button"
-              class="batch-card-item"
-              :class="{ 'is-active': card.key === currentBatchKey }"
-              @click="handleBatchCardClick(card.key)"
-            >
-              <div class="batch-card-main">{{ card.label }}</div>
-              <div class="batch-card-sub">{{ card.subLabel }}</div>
-            </button>
-          </div>
-        </div>
       </div>
     </div>
   </div>

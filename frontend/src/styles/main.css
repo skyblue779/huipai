@@ -116,6 +116,14 @@
   border-bottom: none;
 }
 
+.panel-header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
 .panel-header-muted {
   border-bottom: none;
   margin-bottom: 16px;
@@ -136,9 +144,11 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
   font-size: 14px;
   padding-right: 8px;
   width: 100%;
+  min-width: 0;
   min-height: 32px;
 }
 
@@ -146,6 +156,8 @@
   display: flex;
   align-items: center;
   flex: 1;
+  min-width: 0;
+  overflow: hidden;
   cursor: pointer;
   padding: 4px 0;
 }
@@ -165,12 +177,19 @@
 
 .node-name {
   font-weight: 500;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .node-actions {
   display: flex;
   gap: 6px;
   margin-left: 12px;
+  min-width: 52px;
+  justify-content: flex-end;
   flex-shrink: 0;
   opacity: 0;
   visibility: hidden;

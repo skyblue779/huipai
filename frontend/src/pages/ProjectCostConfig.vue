@@ -64,6 +64,7 @@
                   </span>
                   <span class="node-actions">
                     <el-button
+                      v-if="!isChildNode(data)"
                       type="primary"
                       link
                       size="small"
@@ -95,7 +96,10 @@
           <div v-if="currentNode" class="edit-form">
             <div class="panel-header panel-header-form">
               <span>{{ currentNode.parent_id ? '子阶段编辑' : '阶段信息编辑' }}</span>
-              <el-button type="primary" @click="handleSave">保存修改</el-button>
+              <div class="panel-header-actions">
+                <el-button type="danger" plain @click="handleDelete(currentNode)">删除</el-button>
+                <el-button type="primary" @click="handleSave">保存修改</el-button>
+              </div>
             </div>
             <el-form :model="formData" label-width="100px">
               <el-form-item label="名称 *">
@@ -173,6 +177,11 @@ const treeProps = {
   children: 'children',
   label: 'name'
 };
+
+const isRootNode = (nodeData) =>
+  !nodeData?.parent_id || nodeData.parent_id === null || nodeData.parent_id === '';
+
+const isChildNode = (nodeData) => Boolean(nodeData) && !isRootNode(nodeData);
 
 // 将节点编号转换为可比对的 key
 const toKey = (value) => {
@@ -342,6 +351,11 @@ const handleAddNode = async (parentData) => {
     return;
   }
 
+  if (isChildNode(parentData)) {
+    ElMessage.warning('子节点不能继续新增子子节点');
+    return;
+  }
+
   if (!selectedProjectType.value) {
     ElMessage.warning('请先选择项目类型');
     return;
@@ -431,6 +445,11 @@ const handleSave = async () => {
 
 // 删除阶段节点
 const handleDelete = async (data) => {
+  if (!data?._id) {
+    ElMessage.warning('未选择可删除的阶段');
+    return;
+  }
+
   const dataKey = toKey(data?.id);
   const childCount = stages.value.filter((stage) => toKey(stage.parent_id) === dataKey).length;
   if (childCount > 0) {
