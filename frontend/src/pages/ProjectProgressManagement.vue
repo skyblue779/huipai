@@ -204,6 +204,24 @@
               </div>
             </template>
           </el-table-column>
+          <el-table-column label="责任人" width="140" align="center">
+            <template #default="{ row }">
+              <span v-if="!row.isGroup">{{ row.executorName }}</span>
+              <span v-else class="stage-placeholder">--</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="计划结束日期" width="140" align="center">
+            <template #default="{ row }">
+              <span v-if="!row.isGroup">{{ row.planStart }}</span>
+              <span v-else class="stage-placeholder">--</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="完成时间" width="140" align="center">
+            <template #default="{ row }">
+              <span v-if="!row.isGroup">{{ row.actualFinish }}</span>
+              <span v-else class="stage-placeholder">--</span>
+            </template>
+          </el-table-column>
           <el-table-column label="节点序号" width="90" align="center">
             <template #default="{ row }">
               <span v-if="!row.isGroup && row.projectStageOrder !== null">{{ row.projectStageOrder }}</span>
@@ -224,35 +242,17 @@
               <span v-else class="stage-placeholder">--</span>
             </template>
              </el-table-column>
-              <el-table-column label="计划开始日期" width="140" align="center">
+              <el-table-column v-if="false" label="计划开始日期" width="140" align="center">
                 <template #default="{ row }">
                   <span v-if="!row.isGroup">{{ row.planEnd }}</span>
                   <span v-else class="stage-placeholder">--</span>
                 </template>
               </el-table-column>
-              <el-table-column label="计划结束日期" width="140" align="center">
-                <template #default="{ row }">
-                  <span v-if="!row.isGroup">{{ row.planStart }}</span>
-                  <span v-else class="stage-placeholder">--</span>
-                </template>
-              </el-table-column>
-          <el-table-column label="完成时间" width="140" align="center">
-            <template #default="{ row }">
-              <span v-if="!row.isGroup">{{ row.actualFinish }}</span>
-              <span v-else class="stage-placeholder">--</span>
-            </template>
-          </el-table-column>
           <el-table-column label="预警等级" width="130" align="center">
             <template #default="{ row }">
               <el-tag v-if="!row.isGroup" :type="getWarningTag(row.warningLevel)" effect="plain">
                 {{ row.warningLevel || '正常' }}
               </el-tag>
-              <span v-else class="stage-placeholder">--</span>
-            </template>
-          </el-table-column>
-          <el-table-column label="责任人" width="140" align="center">
-            <template #default="{ row }">
-              <span v-if="!row.isGroup">{{ row.executorName }}</span>
               <span v-else class="stage-placeholder">--</span>
             </template>
           </el-table-column>
@@ -317,7 +317,7 @@
           <el-descriptions-item label="节点名称">{{ detailRow.nodeLabel || detailRow.name || '--' }}</el-descriptions-item>
           <el-descriptions-item label="批次编号">{{ detailRow.batchNo || '--' }}</el-descriptions-item>
           <el-descriptions-item label="批次名称">{{ detailRow.batchName || '--' }}</el-descriptions-item>
-          <el-descriptions-item label="计划开始日期">{{ detailRow.planStart || '--' }}</el-descriptions-item>
+          <el-descriptions-item v-if="false" label="计划开始日期">{{ detailRow.planStart || '--' }}</el-descriptions-item>
           <el-descriptions-item label="计划结束日期">{{ detailRow.planEnd || '--' }}</el-descriptions-item>
           <el-descriptions-item label="完成时间">{{ detailRow.actualFinish || '--' }}</el-descriptions-item>
           <el-descriptions-item label="当前状态">{{ displayStatus(detailRow.status) }}</el-descriptions-item>
@@ -428,7 +428,7 @@
         />
         <div class="dialog-hint">{{ createNodeScopeHint }}</div>
       </el-form-item>
-      <el-form-item label="计划开始日期">
+      <el-form-item v-if="false" label="计划开始日期">
         <el-date-picker
           v-model="createNodeForm.planStart"
           type="date"
@@ -505,7 +505,7 @@
         />
         <div class="dialog-hint">{{ editNodeOrderHint }}</div>
       </el-form-item>
-      <el-form-item label="计划开始日期">
+      <el-form-item v-if="false" label="计划开始日期">
         <el-date-picker
           v-model="editForm.planStart"
           type="date"
@@ -2707,6 +2707,7 @@ onMounted(async () => {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   gap: 10px;
+  padding: 10px 0;
 }
 
 .batch-card-item {

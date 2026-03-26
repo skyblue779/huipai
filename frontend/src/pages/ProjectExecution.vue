@@ -85,9 +85,9 @@
               </div>
             </template>
           </el-table-column>
-          <el-table-column label="计划时间" min-width="200" align="center">
+          <el-table-column label="计划完成" width="140" align="center">
             <template #default="{ row }">
-              <span>{{ formatRange(row.planStart, row.planEnd) }}</span>
+              <span>{{ row.planEnd || '--' }}</span>
             </template>
           </el-table-column>
           <el-table-column label="实际完成" width="140" align="center">
@@ -135,8 +135,8 @@
                 </div>
                 <div class="mobile-card-body">
                   <div class="mobile-info">
-                    <span class="label">计划时间</span>
-                    <span class="value">{{ formatRange(row.planStart, row.planEnd) }}</span>
+                    <span class="label">计划完成</span>
+                    <span class="value">{{ row.planEnd || '--' }}</span>
                   </div>
                   <div class="mobile-info">
                     <span class="label">实际完成</span>
@@ -184,7 +184,7 @@
           <el-descriptions-item label="执行阶段">{{ detailRow.stageLabel }}</el-descriptions-item>
           <el-descriptions-item label="批次编号">{{ detailRow.batchNo || '--' }}</el-descriptions-item>
           <el-descriptions-item label="批次名称">{{ detailRow.batchName || '--' }}</el-descriptions-item>
-          <el-descriptions-item label="计划开始">{{ detailRow.planStart || '--' }}</el-descriptions-item>
+          <el-descriptions-item v-if="false" label="计划开始">{{ detailRow.planStart || '--' }}</el-descriptions-item>
           <el-descriptions-item label="计划完成">{{ detailRow.planEnd || '--' }}</el-descriptions-item>
           <el-descriptions-item label="实际完成">{{ detailRow.actualFinish || '--' }}</el-descriptions-item>
           <el-descriptions-item label="当前状态">{{ detailRow.status || '未完成' }}</el-descriptions-item>
