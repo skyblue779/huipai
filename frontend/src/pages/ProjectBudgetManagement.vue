@@ -458,6 +458,11 @@ const summary = reactive({
   balance: 0
 })
 
+const moneyFormatter = new Intl.NumberFormat('zh-CN', {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2
+})
+
 // 规范化文本值为去空格字符串
 const normalizeLabel = (value) => {
   if (value === null || value === undefined) return ''
@@ -627,7 +632,8 @@ watch(
     if (value !== oldValue) {
       budgetItemForm.costItem = ''
     }
-  }
+  },
+  { flush: 'sync' }
 )
 
 watch(budgetItemDialogVisible, (visible) => {
@@ -886,10 +892,10 @@ const buildBudgetData = (records) => {
   return rows
 }
 
-// 金额格式化（千分位）
+// 金额格式化（固定两位小数）
 const formatMoney = (val) => {
   const amount = toNumber(val)
-  return amount.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+  return moneyFormatter.format(amount)
 }
 
 // 根据比例返回颜色样式

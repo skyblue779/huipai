@@ -212,7 +212,7 @@
           </el-table-column>
           <el-table-column label="计划结束日期" width="140" align="center">
             <template #default="{ row }">
-              <span v-if="!row.isGroup">{{ row.planStart }}</span>
+              <span v-if="!row.isGroup">{{ row.planEnd }}</span>
               <span v-else class="stage-placeholder">--</span>
             </template>
           </el-table-column>
@@ -244,7 +244,7 @@
              </el-table-column>
               <el-table-column v-if="false" label="计划开始日期" width="140" align="center">
                 <template #default="{ row }">
-                  <span v-if="!row.isGroup">{{ row.planEnd }}</span>
+                  <span v-if="!row.isGroup">{{ row.planStart }}</span>
                   <span v-else class="stage-placeholder">--</span>
                 </template>
               </el-table-column>
