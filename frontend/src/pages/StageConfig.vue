@@ -45,9 +45,13 @@
               ref="treeRef"
               :data="treeData"
               node-key="_id"
+              :draggable="!savingOrder"
+              :allow-drag="allowNodeDrag"
+              :allow-drop="allowNodeDrop"
               default-expand-all
               :expand-on-click-node="false"
               @node-click="handleNodeClick"
+              @node-drop="handleNodeDrop"
               highlight-current
               :props="treeProps"
             >
@@ -108,6 +112,26 @@
               <el-form-item label="阶段ID">
                 <el-input v-model="formData.id" disabled />
               </el-form-item>
+              <el-form-item label="责任人">
+                <el-select
+                  v-model="formData.responsiblePersonIds"
+                  multiple
+                  collapse-tags
+                  collapse-tags-tooltip
+                  filterable
+                  clearable
+                  placeholder="请选择责任人"
+                  style="width: 100%"
+                  :loading="memberLoading"
+                >
+                  <el-option
+                    v-for="item in memberOptions"
+                    :key="item.id"
+                    :label="item.label"
+                    :value="item.id"
+                  />
+                </el-select>
+              </el-form-item>
               <el-form-item label="说明">
                 <el-input
                   v-model="formData.description"
@@ -154,17 +178,22 @@ import { Folder, Document, Plus, Delete, Edit } from '@element-plus/icons-vue';
 import api from '../api/client';
 
 const loading = ref(false);
+const savingOrder = ref(false);
 const stages = ref([]);
+const treeData = ref([]);
 const treeRef = ref(null);
 const currentNode = ref(null);
 const projectTypeOptions = ref([]);
 const selectedProjectType = ref('');
+const members = ref([]);
+const memberLoading = ref(false);
 
 const formData = reactive({
   _id: '',
   name: '',
   id: '',
-  description: ''
+  description: '',
+  responsiblePersonIds: []
 });
 
 const treeProps = {
@@ -176,6 +205,50 @@ const isRootNode = (nodeData) =>
   !nodeData?.parent_id || nodeData.parent_id === null || nodeData.parent_id === '';
 
 const isChildNode = (nodeData) => Boolean(nodeData) && !isRootNode(nodeData);
+
+const compareBySortOrder = (a, b) =>
+  (Number(a?.sort_order) || 0) - (Number(b?.sort_order) || 0);
+
+const getMemberId = (value) => {
+  if (!value) return '';
+  if (Array.isArray(value)) return '';
+  if (typeof value === 'object') {
+    return String(value.user_id || value._id || value.id || '').trim();
+  }
+  return String(value).trim();
+};
+
+const getMemberIds = (value) => {
+  if (!value) return [];
+  if (Array.isArray(value)) {
+    return Array.from(new Set(value.flatMap((item) => getMemberIds(item)).filter(Boolean)));
+  }
+  const id = getMemberId(value);
+  return id ? [id] : [];
+};
+
+const getMemberLabel = (value) => {
+  if (!value) return '';
+  if (Array.isArray(value)) return getMemberLabel(value[0]);
+  if (typeof value === 'object') {
+    return String(value.name || value.realname || value.account || value.user_id || value._id || value.id || '').trim();
+  }
+  return String(value).trim();
+};
+
+const memberOptions = computed(() =>
+  members.value
+    .map((item) => {
+      const id = getMemberId(item);
+      const label = getMemberLabel(item);
+      if (!id) return null;
+      return {
+        id,
+        label: label || id
+      };
+    })
+    .filter(Boolean)
+);
 
 // 将节点编号转换为可比对的 key
 const toKey = (value) => {
@@ -196,28 +269,128 @@ const hasChildren = (nodeData) => {
 };
 
 // 生成树形结构数据（按排序字段排序）
-const treeData = computed(() => {
-  if (!stages.value.length) return [];
-
-  const roots = stages.value.filter(
-    (stage) => !stage.parent_id || stage.parent_id === null || stage.parent_id === ''
-  );
+const buildTreeData = (stageList = stages.value) => {
+  if (!Array.isArray(stageList) || stageList.length === 0) return [];
 
   const buildTree = (nodes) =>
-    nodes
+    [...nodes]
+      .sort(compareBySortOrder)
       .map((node) => {
         const nodeKey = toKey(node.id);
-        const children = stages.value.filter((stage) => toKey(stage.parent_id) === nodeKey);
+        const children = stageList.filter((stage) => toKey(stage.parent_id) === nodeKey);
         const nodeData = { ...node };
         if (children.length > 0) {
           nodeData.children = buildTree(children);
         }
         return nodeData;
-      })
-      .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+      });
 
+  const roots = stageList.filter((stage) => isRootNode(stage));
   return buildTree(roots);
-});
+};
+
+const syncTreeData = (stageList = stages.value) => {
+  treeData.value = buildTreeData(stageList);
+};
+
+const getSiblingNodesFromTree = (parentKey) => {
+  if (parentKey === null) return [];
+  const parentNode = treeData.value.find((node) => toKey(node.id) === parentKey);
+  return Array.isArray(parentNode?.children) ? parentNode.children : [];
+};
+
+const getSiblingOrderSnapshot = (parentKey) =>
+  stages.value
+    .filter((stage) => toKey(stage.parent_id) === parentKey)
+    .sort(compareBySortOrder)
+    .map((stage) => stage._id)
+    .filter(Boolean);
+
+const restoreCurrentSelection = async (nodeId) => {
+  if (!nodeId) return;
+  await nextTick();
+  if (treeRef.value) {
+    treeRef.value.setCurrentKey(nodeId);
+  }
+  const freshNode = stages.value.find((stage) => stage._id === nodeId);
+  if (freshNode) {
+    handleNodeClick(freshNode);
+  }
+};
+
+const allowNodeDrag = (node) => isChildNode(node?.data);
+
+const allowNodeDrop = (draggingNode, dropNode, type) => {
+  if (type === 'inner') return false;
+
+  const draggingData = draggingNode?.data;
+  const dropData = dropNode?.data;
+  if (!isChildNode(draggingData) || !isChildNode(dropData)) {
+    return false;
+  }
+
+  return toKey(draggingData.parent_id) === toKey(dropData.parent_id);
+};
+
+const handleNodeDrop = async (draggingNode, dropNode) => {
+  const draggingData = draggingNode?.data;
+  const dropData = dropNode?.data;
+  const parentKey = toKey(dropData?.parent_id);
+
+  if (!isChildNode(draggingData) || !isChildNode(dropData) || parentKey === null) {
+    syncTreeData();
+    return;
+  }
+
+  if (savingOrder.value) {
+    syncTreeData();
+    return;
+  }
+
+  const siblings = getSiblingNodesFromTree(parentKey).filter((node) => node?._id);
+  if (siblings.length === 0) {
+    syncTreeData();
+    return;
+  }
+
+  const previousOrder = getSiblingOrderSnapshot(parentKey);
+  const nextOrder = siblings.map((node) => node._id);
+  const hasOrderChanged =
+    previousOrder.length !== nextOrder.length ||
+    previousOrder.some((nodeId, index) => nodeId !== nextOrder[index]);
+
+  if (!hasOrderChanged) {
+    return;
+  }
+
+  const activeNodeId = draggingData?._id || currentNode.value?._id;
+  savingOrder.value = true;
+  try {
+    await Promise.all(
+      siblings.map((node, index) =>
+        api.updateStage(node._id, {
+          sort_order: index + 1
+        })
+      )
+    );
+
+    ElMessage.success('子阶段顺序已更新');
+    await loadStages();
+    await restoreCurrentSelection(activeNodeId);
+  } catch (error) {
+    console.error('更新子阶段顺序失败：', error);
+    try {
+      await loadStages();
+      await restoreCurrentSelection(activeNodeId);
+    } catch (reloadError) {
+      console.error('恢复阶段数据失败：', reloadError);
+      syncTreeData();
+    }
+    ElMessage.error(error?.message || '更新子阶段顺序失败');
+  } finally {
+    savingOrder.value = false;
+  }
+};
 
 // 清空当前选中与表单数据
 const resetSelection = () => {
@@ -226,6 +399,45 @@ const resetSelection = () => {
   formData.name = '';
   formData.id = '';
   formData.description = '';
+  formData.responsiblePersonIds = [];
+};
+
+const ensureCurrentResponsibleOptions = (value) => {
+  const items = Array.isArray(value) ? value : [value];
+  const nextMembers = [...members.value];
+  let changed = false;
+  items.forEach((item) => {
+    const id = getMemberId(item);
+    if (!id || nextMembers.some((member) => getMemberId(member) === id)) return;
+    nextMembers.push({
+      user_id: id,
+      name: getMemberLabel(item) || id
+    });
+    changed = true;
+  });
+  if (changed) {
+    members.value = nextMembers;
+  }
+};
+
+const loadMembers = async () => {
+  if (memberLoading.value) return;
+  memberLoading.value = true;
+  try {
+    const result = await api.listUsers();
+    if (result?.code === 200 && Array.isArray(result.data)) {
+      members.value = result.data;
+    } else {
+      members.value = [];
+      ElMessage.error(result?.msg || '加载成员失败');
+    }
+  } catch (error) {
+    console.error('加载成员失败：', error);
+    members.value = [];
+    ElMessage.error('加载成员失败');
+  } finally {
+    memberLoading.value = false;
+  }
 };
 
 // 加载项目类型下拉数据
@@ -261,6 +473,7 @@ const loadStages = async () => {
     });
     if (result?.code === 200 && Array.isArray(result.data)) {
       stages.value = result.data;
+      syncTreeData(result.data);
     } else {
       ElMessage.error(result?.msg || '加载阶段失败');
     }
@@ -286,6 +499,8 @@ const handleNodeClick = (data) => {
   formData.name = data.name || '';
   formData.id = data.id || '';
   formData.description = data.description || '';
+  formData.responsiblePersonIds = getMemberIds(data.responsible_person);
+  ensureCurrentResponsibleOptions(data.responsible_person);
 };
 
 // 新增主阶段
@@ -323,6 +538,8 @@ const handleAddStage = async () => {
       await nextTick();
       if (treeRef.value && result.data?._id) {
         treeRef.value.setCurrentKey(result.data._id);
+        const freshNode = stages.value.find((stage) => stage._id === result.data._id) || result.data;
+        handleNodeClick(freshNode);
       }
     } else {
       ElMessage.error(result?.msg || '创建阶段失败');
@@ -415,7 +632,8 @@ const handleSave = async () => {
     const dataToSave = {
       name: formData.name,
       description: formData.description,
-      project_type: selectedProjectType.value
+      project_type: selectedProjectType.value,
+      responsible_person: [...formData.responsiblePersonIds]
     };
 
     const result = await api.updateStage(formData._id, dataToSave);
@@ -475,6 +693,7 @@ const handleDelete = async (data) => {
 
 // 页面初始化时加载项目类型
 onMounted(async () => {
+  await loadMembers();
   await loadProjectTypes();
 });
 </script>

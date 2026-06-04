@@ -290,9 +290,8 @@ const loadProjects = async () => {
     const result = await api.listProjectSummary({ skip: 0, limit: 300 });
     if (result?.code === 200 && Array.isArray(result.data)) {
       projectOptions.value = result.data.map((item) => {
-        const label = item.project_code
-          ? `${item.project_code} - ${item.project_name || '未命名项目'}`
-          : (item.project_name || '未命名项目');
+        const orderNo = String(item.order_no || item.contract_name || '').trim();
+        const label = orderNo || '未填写订单号';
         return { label, value: item.project_name || '' };
       }).filter((item) => item.value);
     } else {

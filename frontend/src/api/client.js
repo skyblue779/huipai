@@ -1,7 +1,8 @@
-﻿const DEFAULT_BASE_URL = 'http://172.16.0.66:9989'; 
+﻿// const DEFAULT_BASE_URL = 'http://172.16.0.66:9989';
+// const DEFAULT_BASE_URL = 'http://localhost:9989';
 //本地测试
 
-// const DEFAULT_BASE_URL = '/api';  
+const DEFAULT_BASE_URL = '/api';
 //线上环境
 
 const normalizeBaseUrl = (url) => url.replace(/\/+$/, '');
@@ -18,6 +19,12 @@ const baseUrl = resolveBaseUrl();
 
 const buildUrl = (endpoint) => {
   const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  if (!baseUrl) {
+    return normalizedEndpoint;
+  }
+  if (baseUrl.endsWith('/api') && (normalizedEndpoint === '/api' || normalizedEndpoint.startsWith('/api/'))) {
+    return `${baseUrl}${normalizedEndpoint.slice(4)}`;
+  }
   return `${baseUrl}${normalizedEndpoint}`;
 };
 
@@ -125,7 +132,14 @@ const listProjectProgress = ({ skip = 0, limit = 300, search = '', projectCode =
   return request('GET', `/api/progress/list?${params.toString()}`);
 };
 
-const listProjectSummary = ({ skip = 0, limit = 300, search = '', projectCode = '', projectName = '' } = {}) => {
+const listProjectSummary = ({
+  skip = 0,
+  limit = 300,
+  search = '',
+  projectCode = '',
+  projectName = '',
+  orderNo = ''
+} = {}) => {
   const params = new URLSearchParams({
     skip: String(skip),
     limit: String(limit)
@@ -139,17 +153,51 @@ const listProjectSummary = ({ skip = 0, limit = 300, search = '', projectCode = 
   if (projectName) {
     params.set('project_name', projectName);
   }
+  if (orderNo) {
+    params.set('order_no', orderNo);
+  }
   return request('GET', `/api/project/list-summary?${params.toString()}`);
 };
 
 const createProjectProgress = (data) => request('POST', '/api/progress/create', data);
 const updateProjectProgress = (dataId, data) => request('PUT', `/api/progress/update/${dataId}`, data);
+const delayProjectProgress = (data) => request('POST', '/api/progress/delay', data);
+const createProjectDelayRequest = (data) => request('POST', '/api/progress/delay-request/create', data);
+const listProjectDelayRequests = ({ projectCode = '', projectName = '', status = 'pending' } = {}) => {
+  const params = new URLSearchParams();
+  if (projectCode) params.set('project_code', projectCode);
+  if (projectName) params.set('project_name', projectName);
+  if (status) params.set('status', status);
+  const query = params.toString();
+  return request('GET', query ? `/api/progress/delay-request/list?${query}` : '/api/progress/delay-request/list');
+};
+const approveProjectDelayRequest = (requestId, data = {}) =>
+  request('POST', `/api/progress/delay-request/${requestId}/approve`, data);
+const rejectProjectDelayRequest = (requestId, data = {}) =>
+  request('POST', `/api/progress/delay-request/${requestId}/reject`, data);
 const deleteProjectProgress = (dataId) => request('DELETE', `/api/progress/delete/${dataId}`);
 const uploadProjectProgressFiles = (files) => {
   if (files instanceof FormData) {
     return requestForm('POST', '/api/progress/upload', files);
   }
   return request('POST', '/api/progress/upload', files);
+};
+
+const getProjectProgressAttachmentDownloadUrl = ({
+  url = '',
+  originalUrl = '',
+  downloadUrl = '',
+  fileKey = '',
+  name = ''
+} = {}) => {
+  const params = new URLSearchParams();
+  if (url) params.set('url', url);
+  if (originalUrl) params.set('original_url', originalUrl);
+  if (downloadUrl) params.set('download_url', downloadUrl);
+  if (fileKey) params.set('file_key', fileKey);
+  if (name) params.set('name', name);
+  const query = params.toString();
+  return buildUrl(query ? `/api/progress/download?${query}` : '/api/progress/download');
 };
 
 const listProjectBudgets = ({
@@ -256,6 +304,8 @@ const uploadProjectBudgetFiles = (files) => {
 
 const listUsers = () => request('GET', '/api/user/list');
 const getUserInfo = (userId) => request('GET', `/api/user/info/${userId}`);
+const listRoleMembers = (roleId) => request('GET', `/api/user/role-members/${roleId}`);
+const listProjectManagers = () => request('GET', '/api/user/project-managers');
 
 export default {
   listProjectTypes,
@@ -272,8 +322,14 @@ export default {
   listProjectSummary,
   createProjectProgress,
   updateProjectProgress,
+  delayProjectProgress,
+  createProjectDelayRequest,
+  listProjectDelayRequests,
+  approveProjectDelayRequest,
+  rejectProjectDelayRequest,
   deleteProjectProgress,
   uploadProjectProgressFiles,
+  getProjectProgressAttachmentDownloadUrl,
   listProjectBudgets,
   createProjectBudget,
   updateProjectBudget,
@@ -288,5 +344,7 @@ export default {
   deleteDelivery,
   uploadDeliveryFiles,
   listUsers,
-  getUserInfo
+  getUserInfo,
+  listRoleMembers,
+  listProjectManagers
 };

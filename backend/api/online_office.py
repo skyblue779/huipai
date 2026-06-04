@@ -762,6 +762,36 @@ class OnlineOfficeAPI:
         result = self._request('POST', url, json={'user_id': user_id})
         return result.get('user', {})
 
+    def list_role_members(self, role_id: str) -> List[Dict[str, Any]]:
+        url = f"{self.base_url}/role/member_list"
+        result = self._request('POST', url, json={'role_id': role_id})
+        return result.get('users', [])
+
+    def get_account_info(
+        self,
+        user_id: str = '',
+        account: str = '',
+        country_code: str = '86',
+        mobile: str = '',
+        email: str = ''
+    ) -> Dict[str, Any]:
+        payload = {}
+        if user_id:
+            payload['user_id'] = user_id
+        elif account:
+            payload['account'] = account
+        elif mobile:
+            payload['country_code'] = country_code or '86'
+            payload['mobile'] = mobile
+        elif email:
+            payload['email'] = email
+        else:
+            raise ValueError('At least one account identifier is required')
+
+        url = f"{self.base_url}/account/account_info"
+        result = self._request('POST', url, json=payload)
+        return result.get('user', {})
+
     def send_dingding_message(
         self,
         corp_id: str,

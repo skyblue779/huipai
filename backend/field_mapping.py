@@ -21,6 +21,7 @@ STAGE_CONFIG_FIELDS_EN = {
     'sort_order': '_widget_1769130163598',
     'description': '_widget_1769150079419',
     'project_type': '_widget_1769152663361',
+    'responsible_person': '_widget_1775638422894',
 }
 
 # 椤圭洰鎴愭湰闃舵閰嶇疆琛ㄧ殑鑻辨枃瀛楁鏄犲皠 (entry: 2ae1401fbd78bcccaba24a6b)
@@ -32,6 +33,7 @@ COST_STAGE_FIELDS_EN = {
     'description': '_widget_1769150079419',
     'project_type': '_widget_1769152663361',
     'budget_standard': '_widget_1770193455058',
+    'responsible_person': '_widget_1775633742684',
 }
 
 # 项目类型表字段映射 (entry: 6e32422ead05c1ce9790f812)
@@ -50,9 +52,10 @@ COST_TYPE_REVERSE_EN = {v: k for k, v in COST_TYPE_FIELDS_EN.items()}
 
 # 项目表的字段映射 (entry: e8894672999be041d2d1c4f1)
 PROJECT_FIELDS = {
-    '项目编号': '_widget_1769064437789',
+    '项目编号': '项目编号',
     '项目名称': '_widget_1769064437770',
     '合同名称': '_widget_1769064437829',
+    '订单号': '_widget_1769064437829',
     '项目类型': '_widget_1769064636768',
     '建设地点': '_widget_1769064637832',
     '项目成本类型': '_widget_1770203938133',
@@ -60,6 +63,7 @@ PROJECT_FIELDS = {
     '计划开工': '_widget_1769064637850',
     '计划完工': '_widget_1769064637874',
     '项目经理': '_widget_1769064637963',
+    '商务负责人': '_widget_1778060298972',
     '责任部门': '_widget_1769066077660',
     '参与人员': '_widget_1769066077800',
     '子表单': '_widget_1769131834894',
@@ -78,13 +82,14 @@ PROJECT_PROGRESS_FIELDS_EN = {
     'project_code': '_widget_1769239633492',
     'project_name': '_widget_1769239633511',
     'project_type': '_widget_1769239633530',
-    'batch_no': '_widget_1773215417774',
-    'batch_name': '_widget_1773215417815',
+    'batch_no': '_widget_1773629395042',
+    'batch_name': '_widget_1773629395083',
     'main_stage': '_widget_1769239633707',
     'main_stage_order': '_widget_1769580025032',
     'project_stage': '_widget_1769239633603',
     'project_stage_order': '_widget_1769580025051',
     'executor': '_widget_1769239633622',
+    'approver': '_widget_1775701621703',
     'plan_time': '_widget_1769239633640',
     'plan_finishtime': '_widget_1770709742059',
     'actual_finish': '_widget_1769239633664',
@@ -101,9 +106,10 @@ PROJECT_REVERSE = {v: k for k, v in PROJECT_FIELDS.items()}
 
 # 项目表英文字段映射（前端使用）
 PROJECT_FIELDS_EN = {
-    'project_code': '_widget_1769064437789',
+    'project_code': '项目编号',
     'project_name': '_widget_1769064437770',
     'contract_name': '_widget_1769064437829',
+    'order_no': '_widget_1769064437829',
     'project_type': '_widget_1769064636768',
     'location': '_widget_1769064637832',
     'project_cost_type': '_widget_1770203938133',
@@ -111,6 +117,7 @@ PROJECT_FIELDS_EN = {
     'plan_start': '_widget_1769064637850',
     'plan_finish': '_widget_1769064637874',
     'project_manager': '_widget_1769064637963',
+    'business_owner': '_widget_1778060298972',
     'owner_department': '_widget_1769066077660',
     'participants': '_widget_1769066077800',
 }
@@ -130,6 +137,7 @@ PROJECT_BUDGET_FIELDS_EN = {
     'actual_total': '_widget_1770184688149',
     'cost_details': '_widget_1770184688372',
     'variance_root_cause': '_widget_1770362492081',
+    'responsible_person': '_widget_1775633774357',
 }
 
 PROJECT_BUDGET_DETAIL_FIELDS_EN = {

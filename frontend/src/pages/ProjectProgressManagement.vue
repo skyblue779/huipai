@@ -10,7 +10,7 @@
               v-model="currentProjectKey"
               placeholder="选择项目"
               filterable
-              style="width: 240px"
+              style="width: 320px"
             >
               <el-option
                 v-for="item in projectOptions"
@@ -132,6 +132,16 @@
           <div class="table-actions">
             <el-button
               type="primary"
+              plain
+              size="small"
+              :disabled="!currentBatchCard"
+              @click="openBatchAttachmentDialog"
+            >
+              附件管理
+            </el-button>
+            <el-button
+              v-if="isProjectManager"
+              type="primary"
               size="small"
               :disabled="!stageOptions.length || !currentBatchCard"
               @click="openCreateNodeDialog()"
@@ -139,6 +149,7 @@
               新增节点
             </el-button>
             <el-button
+              v-if="isProjectManager"
               type="primary"
               plain
               size="small"
@@ -148,6 +159,7 @@
               编辑批次
             </el-button>
             <el-button
+              v-if="isProjectManager"
               type="primary"
               plain
               size="small"
@@ -210,6 +222,12 @@
               <span v-else class="stage-placeholder">--</span>
             </template>
           </el-table-column>
+          <el-table-column label="审批人" width="140" align="center">
+            <template #default="{ row }">
+              <span v-if="!row.isGroup">{{ row.approverName }}</span>
+              <span v-else class="stage-placeholder">--</span>
+            </template>
+          </el-table-column>
           <el-table-column label="计划结束日期" width="140" align="center">
             <template #default="{ row }">
               <span v-if="!row.isGroup">{{ row.planEnd }}</span>
@@ -256,11 +274,11 @@
               <span v-else class="stage-placeholder">--</span>
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="180" align="center" fixed="right">
+          <el-table-column label="操作" :width="isProjectManager ? 220 : 90" align="center" fixed="right">
             <template #default="{ row }">
               <div v-if="!row.isGroup" class="action-buttons">
                 <el-button
-                  v-if="row.mainStageLabel"
+                  v-if="isProjectManager && row.mainStageLabel"
                   class="action-link"
                   type="primary"
                   link
@@ -277,6 +295,16 @@
                   @click="openDetailDialog(row)"
                 >
                   详情
+                </el-button>
+                <el-button
+                  v-if="canManageNode(row)"
+                  class="action-link"
+                  type="primary"
+                  link
+                  size="small"
+                  @click="openDelayDialog(row)"
+                >
+                  一键延期
                 </el-button>
                 <el-button
                   v-if="canManageNode(row)"
@@ -323,6 +351,7 @@
           <el-descriptions-item label="当前状态">{{ displayStatus(detailRow.status) }}</el-descriptions-item>
           <el-descriptions-item label="预警等级">{{ detailRow.warningLevel || '正常' }}</el-descriptions-item>
           <el-descriptions-item label="责任人">{{ detailRow.executorName || '--' }}</el-descriptions-item>
+          <el-descriptions-item label="审批人">{{ detailRow.approverName || '--' }}</el-descriptions-item>
           <el-descriptions-item label="执行说明" :span="2">
             {{ detailRow.executionNote || '--' }}
           </el-descriptions-item>
@@ -343,18 +372,21 @@
               >
                 <div class="attachment-name" :title="item.name">{{ item.name }}</div>
                 <div class="attachment-actions">
-                  <el-button
-                    v-if="item.isImage && item.url"
-                    link
-                    type="primary"
-                    @click="previewAttachmentImage(item)"
-                  >
-                    预览图片
-                  </el-button>
-                  <el-button v-if="item.url" link type="primary" @click="downloadAttachment(item)">
-                    下载
-                  </el-button>
-                  <span v-if="!item.url" class="attachment-text">无可用链接</span>
+                  <template v-if="isProjectManager">
+                    <el-button
+                      v-if="item.isImage && item.url"
+                      link
+                      type="primary"
+                      @click="previewAttachmentImage(item)"
+                    >
+                      预览图片
+                    </el-button>
+                    <el-button v-if="item.canDownload" link type="primary" @click="downloadAttachment(item)">
+                      下载
+                    </el-button>
+                    <span v-if="!item.canDownload" class="attachment-text">无可用链接</span>
+                  </template>
+                  <span v-else class="attachment-text">请在附件管理中下载</span>
                 </div>
               </div>
             </div>
@@ -385,9 +417,91 @@
       </div>
       <template #footer>
         <el-button @click="imagePreviewVisible = false">关闭</el-button>
-        <el-button type="primary" :disabled="!previewImageUrl" @click="downloadAttachment(previewImageItem)">
+        <el-button
+          v-if="isProjectManager"
+          type="primary"
+          :disabled="!previewImageUrl"
+          @click="downloadAttachment(previewImageItem)"
+        >
           下载图片
         </el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog
+      v-model="batchAttachmentDialogVisible"
+      :title="batchAttachmentDialogTitle"
+      width="920px"
+      append-to-body
+    >
+      <div class="batch-attachment-summary">
+        {{ batchAttachmentSummaryText }}
+      </div>
+      <div v-if="batchAttachmentEntries.length" class="batch-attachment-grid">
+        <div
+          v-for="item in batchAttachmentEntries"
+          :key="item.pinId"
+          class="batch-attachment-card"
+          :class="{ 'is-pinned': item.isPinned }"
+        >
+          <div class="batch-attachment-card__main">
+            <div class="batch-attachment-card__title">
+              <span class="batch-attachment-card__name" :title="item.name">{{ item.name }}</span>
+              <el-tag v-if="item.isPinned" size="small" type="warning" effect="plain">已置顶</el-tag>
+            </div>
+            <div class="batch-attachment-card__meta">
+              <span>主阶段：{{ item.mainStageLabel || '--' }}</span>
+              <span>节点：{{ item.nodeLabel || '--' }}</span>
+              <span>责任人：{{ item.executorName || '--' }}</span>
+            </div>
+          </div>
+          <div class="batch-attachment-card__actions">
+            <el-button link type="warning" @click="toggleBatchAttachmentPin(item)">
+              {{ item.isPinned ? '取消置顶' : '置顶' }}
+            </el-button>
+            <el-button
+              v-if="item.canView"
+              link
+              type="primary"
+              @click="viewBatchAttachment(item)"
+            >
+              查看
+            </el-button>
+            <el-button
+              v-if="item.canDownload"
+              link
+              type="primary"
+              @click="downloadAttachment(item)"
+            >
+              下载
+            </el-button>
+            <template v-if="isProjectManager">
+              <el-button
+                link
+                type="primary"
+                :disabled="Boolean(attachmentActionKey)"
+                :loading="attachmentActionKey === getAttachmentActionKey(item)"
+                @click="handleEditBatchAttachment(item)"
+              >
+                编辑
+              </el-button>
+              <el-button
+                link
+                type="danger"
+                :disabled="Boolean(attachmentActionKey)"
+                :loading="attachmentActionKey === getAttachmentActionKey(item)"
+                @click="handleDeleteBatchAttachment(item)"
+              >
+                删除
+              </el-button>
+            </template>
+            <span v-if="!item.canView && !item.canDownload" class="attachment-text">无可用链接</span>
+          </div>
+        </div>
+      </div>
+      <el-empty v-else description="当前批次暂无附件" />
+      <template #footer>
+        <el-button @click="batchAttachmentDialogVisible = false">关闭</el-button>
       </template>
     </el-dialog>
 
@@ -453,6 +567,23 @@
           collapse-tags
           collapse-tags-tooltip
           filterable
+          placeholder="请选择成员"
+          style="width: 100%"
+          :loading="memberLoading"
+        >
+          <el-option
+            v-for="item in memberOptions"
+            :key="item.id"
+            :label="item.label"
+            :value="item.id"
+          />
+        </el-select>
+      </el-form-item>
+      <el-form-item label="审批人">
+        <el-select
+          v-model="createNodeForm.approverId"
+          filterable
+          clearable
           placeholder="请选择成员"
           style="width: 100%"
           :loading="memberLoading"
@@ -542,11 +673,128 @@
           />
         </el-select>
       </el-form-item>
+      <el-form-item label="审批人">
+        <el-select
+          v-model="editForm.approverId"
+          filterable
+          clearable
+          placeholder="请选择成员"
+          style="width: 100%"
+          :loading="memberLoading"
+        >
+          <el-option
+            v-for="item in memberOptions"
+            :key="item.id"
+            :label="item.label"
+            :value="item.id"
+          />
+        </el-select>
+      </el-form-item>
     </el-form>
     <template #footer>
       <el-button @click="editDialogVisible = false">取消</el-button>
       <el-button type="primary" :loading="savingEdit" @click="handleSaveEdit">保存</el-button>
     </template>
+    </el-dialog>
+
+    <el-dialog v-model="delayDialogVisible" title="一键延期" width="520px">
+      <el-form label-width="110px">
+        <el-form-item label="起始节点">
+          <el-input :model-value="delayRow?.nodeLabel || delayRow?.name || '--'" disabled />
+        </el-form-item>
+        <el-form-item label="所属批次">
+          <el-input :model-value="currentBatchCard?.label || '--'" disabled />
+        </el-form-item>
+        <el-form-item label="延期天数">
+          <el-input-number
+            v-model="delayForm.days"
+            :min="1"
+            :step="1"
+            :precision="0"
+            controls-position="right"
+            style="width: 100%"
+            placeholder="请输入延期天数"
+          />
+        </el-form-item>
+      </el-form>
+      <div class="delay-dialog-hint">
+        {{ delayScopeHint }}
+      </div>
+      <div v-if="delayAffectedNodes.length" class="delay-preview-list">
+        <span
+          v-for="item in delayAffectedPreviewNodes"
+          :key="item.recordId || item.id"
+          class="delay-preview-tag"
+        >
+          {{ item.nodeLabel || item.name || '--' }}
+        </span>
+        <span v-if="delayAffectedNodes.length > delayAffectedPreviewNodes.length" class="delay-preview-more">
+          等 {{ delayAffectedNodes.length }} 个节点
+        </span>
+      </div>
+      <template #footer>
+        <el-button @click="delayDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="delayingNodes" @click="handleApplyDelay">
+          确认延期
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="delayRequestReviewDialogVisible" title="延期申请审核" width="920px">
+      <el-table
+        :data="delayRequests"
+        stripe
+        border
+        v-loading="delayRequestReviewLoading"
+        empty-text="当前项目暂无待审核延期申请"
+      >
+        <el-table-column label="申请时间" width="170" align="center">
+          <template #default="{ row }">{{ row.created_at || '--' }}</template>
+        </el-table-column>
+        <el-table-column label="批次" min-width="140">
+          <template #default="{ row }">{{ buildBatchCardLabel(row.batch_no, row.batch_name) || '--' }}</template>
+        </el-table-column>
+        <el-table-column label="起始节点" min-width="180">
+          <template #default="{ row }">{{ row.nodes?.[0]?.node_label || row.nodes?.[0]?.main_stage_label || '--' }}</template>
+        </el-table-column>
+        <el-table-column label="申请人" width="120" align="center">
+          <template #default="{ row }">{{ formatUser(row.applicant) }}</template>
+        </el-table-column>
+        <el-table-column label="延期天数" width="90" align="center">
+          <template #default="{ row }">{{ row.delay_days || 0 }}</template>
+        </el-table-column>
+        <el-table-column label="申请原因" min-width="180">
+          <template #default="{ row }">{{ row.reason || '--' }}</template>
+        </el-table-column>
+        <el-table-column label="节点数" width="80" align="center">
+          <template #default="{ row }">{{ row.node_count || row.nodes?.length || 0 }}</template>
+        </el-table-column>
+        <el-table-column label="操作" width="160" align="center" fixed="right">
+          <template #default="{ row }">
+            <el-button
+              type="primary"
+              link
+              size="small"
+              :loading="handlingDelayRequestId === row.request_id && handlingDelayRequestAction === 'approve'"
+              @click="handleApproveDelayRequest(row)"
+            >
+              通过
+            </el-button>
+            <el-button
+              type="danger"
+              link
+              size="small"
+              :loading="handlingDelayRequestId === row.request_id && handlingDelayRequestAction === 'reject'"
+              @click="handleRejectDelayRequest(row)"
+            >
+              驳回
+            </el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+      <template #footer>
+        <el-button @click="delayRequestReviewDialogVisible = false">关闭</el-button>
+      </template>
     </el-dialog>
 
     <el-dialog v-model="createBatchDialogVisible" title="新增批次" width="460px">
@@ -612,6 +860,7 @@
 import { ref, computed, onMounted, watch } from 'vue';
 import { ElMessage, ElMessageBox, ElConfigProvider } from 'element-plus';
 import zhCn from 'element-plus/es/locale/lang/zh-cn';
+import { useRoute } from 'vue-router';
 import {
   Search,
   Check,
@@ -621,6 +870,7 @@ import {
   Bell
 } from '@element-plus/icons-vue';
 import api from '../api/client';
+import { resolveWebpageUserId } from '../utils/webpageUser';
 
 const buildEmptyCreateNodeForm = () => ({
   stageKey: '',
@@ -629,6 +879,7 @@ const buildEmptyCreateNodeForm = () => ({
   planStart: '',
   planEnd: '',
   executorIds: [],
+  approverId: '',
   syncAllBatches: false
 });
 
@@ -637,12 +888,18 @@ const buildEmptyEditForm = () => ({
   orderNo: 1,
   planStart: '',
   planEnd: '',
-  executorIds: []
+  executorIds: [],
+  approverId: ''
+});
+
+const buildEmptyDelayForm = () => ({
+  days: 1
 });
 
 const searchQuery = ref('');
 const loading = ref(false);
 const progressRecords = ref([]);
+const projectSummaryRecords = ref([]);
 const orderCache = ref(new Map());
 const currentProjectKey = ref('');
 const currentBatchKey = ref('');
@@ -650,6 +907,9 @@ const detailDialogVisible = ref(false);
 const detailRow = ref(null);
 const imagePreviewVisible = ref(false);
 const previewImageItem = ref(null);
+const batchAttachmentDialogVisible = ref(false);
+const batchAttachmentPinnedIds = ref([]);
+const attachmentActionKey = ref('');
 const createNodeDialogVisible = ref(false);
 const creatingNode = ref(false);
 const createNodeForm = ref(buildEmptyCreateNodeForm());
@@ -657,7 +917,17 @@ const editDialogVisible = ref(false);
 const savingEdit = ref(false);
 const editForm = ref(buildEmptyEditForm());
 const editRow = ref(null);
+const delayDialogVisible = ref(false);
+const delayingNodes = ref(false);
+const delayForm = ref(buildEmptyDelayForm());
+const delayRow = ref(null);
+const delayRequestReviewDialogVisible = ref(false);
+const delayRequestReviewLoading = ref(false);
+const delayRequests = ref([]);
+const handlingDelayRequestId = ref('');
+const handlingDelayRequestAction = ref('');
 const originalExecutorIds = ref([]);
+const originalApproverId = ref('');
 const originalPlanRange = ref({
   planStart: '',
   planEnd: ''
@@ -677,6 +947,15 @@ const editBatchForm = ref({
   batchName: ''
 });
 const editBatchSourceKey = ref('');
+const userParam = ref('');
+const userProfile = ref({
+  user_id: '',
+  name: '',
+  account: ''
+});
+const projectManagerMembers = ref([]);
+const projectManagerLoading = ref(false);
+const route = useRoute();
 
 // 解析日期值为 Date
 const parseDateValue = (value) => {
@@ -736,6 +1015,14 @@ const formatDate = (value) => {
   return `${year}-${month}-${day}`;
 };
 
+const addDaysToDate = (value, days) => {
+  const parsed = parseDateValue(value);
+  if (!parsed) return '';
+  const next = new Date(parsed.getTime());
+  next.setDate(next.getDate() + days);
+  return formatDate(next);
+};
+
 // 表格日期展示格式
 const formatDateCell = (value) => {
   if (!value) return '';
@@ -789,6 +1076,11 @@ const getExecutorIds = (value) => {
   return [String(value)];
 };
 
+const getMemberId = (value) => {
+  const ids = getExecutorIds(value);
+  return ids.length ? ids[0] : '';
+};
+
 const IMAGE_EXT_RE = /\.(png|jpe?g|gif|bmp|webp|svg|heic|heif)(?:$|[?#])/i;
 
 const isImageByText = (value) => {
@@ -811,6 +1103,10 @@ const formatAttachment = (item) => {
     return {
       name: text,
       url,
+      downloadUrl: '',
+      originalUrl: url,
+      fileKey: '',
+      canDownload: Boolean(url),
       isImage: isImageAttachment(text, url, '')
     };
   }
@@ -824,7 +1120,10 @@ const formatAttachment = (item) => {
     item.id ||
     item._id ||
     '';
-  const url = item.url || item.link || item.path || item.download_url || '';
+  const fileKey = String(item.qnKey || item.qn_key || item.key || item.file_key || '').trim();
+  const downloadUrl = String(item.downloadUrl || item.download_url || '').trim();
+  const originalUrl = String(item.originalUrl || item.original_url || item.url || item.link || item.path || '').trim();
+  const url = originalUrl || downloadUrl;
   const mimeType =
     item.mime_type ||
     item.mimeType ||
@@ -840,6 +1139,10 @@ const formatAttachment = (item) => {
   return {
     name: normalizedName || normalizedUrl,
     url: normalizedUrl,
+    downloadUrl,
+    originalUrl,
+    fileKey,
+    canDownload: Boolean(downloadUrl || originalUrl || fileKey),
     isImage: isImageAttachment(normalizedName, normalizedUrl, mimeType)
   };
 };
@@ -853,9 +1156,162 @@ const normalizeAttachmentList = (value) => {
   return single ? [single] : [];
 };
 
+const normalizeAttachmentPayloadList = (value) => {
+  if (!value) return [];
+  return Array.isArray(value) ? [...value] : [value];
+};
+
 const detailAttachments = computed(() => normalizeAttachmentList(detailRow.value?.siteUploadRaw));
 const previewImageTitle = computed(() => previewImageItem.value?.name || '图片预览');
 const previewImageUrl = computed(() => previewImageItem.value?.url || '');
+
+const BATCH_ATTACHMENT_PIN_STORAGE_KEY = 'project-progress-batch-attachment-pins';
+
+const currentBatchAttachmentScopeKey = computed(() => [
+  currentProject.value.projectCode || '',
+  currentProject.value.projectName || '',
+  currentProject.value.projectType || '',
+  currentBatchDescriptor.value?.key || ''
+].join('||'));
+
+const loadBatchAttachmentPinnedIds = () => {
+  if (typeof window === 'undefined') return [];
+  const scopeKey = currentBatchAttachmentScopeKey.value;
+  if (!scopeKey) return [];
+  try {
+    const raw = window.localStorage.getItem(BATCH_ATTACHMENT_PIN_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    const ids = parsed?.[scopeKey];
+    return Array.isArray(ids) ? ids.map((item) => String(item)).filter(Boolean) : [];
+  } catch (error) {
+    console.warn('读取批次附件置顶配置失败：', error);
+    return [];
+  }
+};
+
+const saveBatchAttachmentPinnedIds = (ids) => {
+  if (typeof window === 'undefined') return;
+  const scopeKey = currentBatchAttachmentScopeKey.value;
+  if (!scopeKey) return;
+  try {
+    const raw = window.localStorage.getItem(BATCH_ATTACHMENT_PIN_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    parsed[scopeKey] = Array.from(new Set((ids || []).map((item) => String(item)).filter(Boolean)));
+    window.localStorage.setItem(BATCH_ATTACHMENT_PIN_STORAGE_KEY, JSON.stringify(parsed));
+  } catch (error) {
+    console.warn('保存批次附件置顶配置失败：', error);
+  }
+};
+
+const buildBatchAttachmentPinId = (attachment, node, index) =>
+  [
+    node.recordId || node.id || '',
+    attachment.fileKey || attachment.originalUrl || attachment.downloadUrl || attachment.url || '',
+    attachment.name || '',
+    index
+  ].join('::');
+
+const batchAttachmentEntries = computed(() => {
+  const pinnedSet = new Set(batchAttachmentPinnedIds.value);
+  const entries = [];
+  timelineNodes.value.forEach((node, nodeIndex) => {
+    const sourceAttachments = normalizeAttachmentPayloadList(node.siteUploadRaw);
+    sourceAttachments.forEach((sourceAttachment, attachmentIndex) => {
+      const attachment = formatAttachment(sourceAttachment);
+      if (!attachment) return;
+      const pinId = buildBatchAttachmentPinId(attachment, node, attachmentIndex);
+      entries.push({
+        ...attachment,
+        pinId,
+        recordId: node.recordId || '',
+        attachmentIndex,
+        isPinned: pinnedSet.has(pinId),
+        canView: Boolean(attachment.originalUrl || attachment.downloadUrl || attachment.url),
+        nodeLabel: node.nodeLabel || node.name || '--',
+        mainStageLabel: node.mainStageLabel || '--',
+        executorName: node.executorName || '--',
+        nodeOrder: nodeIndex,
+        attachmentOrder: attachmentIndex
+      });
+    });
+  });
+
+  return entries.sort((a, b) => {
+    if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1;
+    if (a.nodeOrder !== b.nodeOrder) return a.nodeOrder - b.nodeOrder;
+    if (a.attachmentOrder !== b.attachmentOrder) return a.attachmentOrder - b.attachmentOrder;
+    return String(a.name || '').localeCompare(String(b.name || ''), 'zh');
+  });
+});
+
+const batchAttachmentDialogTitle = computed(() => {
+  if (!currentBatchCard.value) return '批次附件管理';
+  return `批次附件管理 - ${currentBatchCard.value.label}`;
+});
+
+const triggerDownload = (href, filename) => {
+  const link = document.createElement('a');
+  link.href = href;
+  link.download = filename || '附件';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+};
+
+const parseAttachmentFilename = (contentDisposition) => {
+  const headerValue = String(contentDisposition || '').trim();
+  if (!headerValue) return '';
+
+  const utf8Match = headerValue.match(/filename\*\s*=\s*UTF-8''([^;]+)/i);
+  if (utf8Match?.[1]) {
+    try {
+      return decodeURIComponent(utf8Match[1].trim()).replace(/^["']|["']$/g, '');
+    } catch (error) {
+      console.warn('解析 UTF-8 文件名失败：', error);
+    }
+  }
+
+  const plainMatch = headerValue.match(/filename\s*=\s*("?)([^";]+)\1/i);
+  if (plainMatch?.[2]) {
+    return plainMatch[2].trim();
+  }
+
+  return '';
+};
+
+const shiftPlanTimeValue = (rawValue, days) => {
+  if (!rawValue || !days) return rawValue;
+
+  const shiftTextValue = (value) => {
+    const shifted = addDaysToDate(value, days);
+    return shifted || value;
+  };
+
+  if (Array.isArray(rawValue)) {
+    return rawValue.map((item, index) => (index < 2 ? shiftTextValue(item) : item));
+  }
+
+  if (rawValue && typeof rawValue === 'object') {
+    const updated = { ...rawValue };
+    ['start', 'begin', 'planStart', 'end', 'finish', 'planEnd'].forEach((key) => {
+      if (key in updated) {
+        updated[key] = shiftTextValue(updated[key]);
+      }
+    });
+    return updated;
+  }
+
+  if (typeof rawValue === 'string') {
+    const datePattern = /\d{4}[-/]\d{1,2}[-/]\d{1,2}(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?/g;
+    const matches = rawValue.match(datePattern);
+    if (matches?.length) {
+      return rawValue.replace(datePattern, (matched) => shiftTextValue(matched));
+    }
+  }
+
+  return shiftTextValue(rawValue);
+};
 
 // 更新计划时间字段中的开始日期
 const updatePlanTimeValue = (rawValue, newStart, fallbackEnd) => {
@@ -914,6 +1370,73 @@ const normalizeLabel = (value) => {
   if (typeof value === 'string') return value.trim();
   return String(value);
 };
+
+const normalizeToken = (value) => normalizeLabel(value).toLowerCase();
+
+const isSameUserToken = (left, right) => {
+  const leftToken = normalizeToken(left);
+  const rightToken = normalizeToken(right);
+  return Boolean(leftToken && rightToken && leftToken === rightToken);
+};
+
+const USER_TOKEN_KEYS = [
+  'user_id',
+  'userid',
+  'userId',
+  '_id',
+  'id',
+  'account',
+  'name',
+  'username',
+  'user_name',
+  'userName',
+  'nickname',
+  'realname',
+  'uniqueid',
+  'mobile',
+  'email'
+];
+
+const collectUserTokens = (value) => {
+  if (!value) return [];
+  if (Array.isArray(value)) {
+    return value.flatMap((item) => collectUserTokens(item));
+  }
+  if (typeof value === 'object') {
+    return USER_TOKEN_KEYS.flatMap((key) => collectUserTokens(value?.[key]));
+  }
+  const token = normalizeToken(value);
+  return token ? [token] : [];
+};
+
+const currentUserTokens = computed(
+  () =>
+    new Set(
+      collectUserTokens([
+        userParam.value,
+        userProfile.value
+      ])
+    )
+);
+
+const userValueMatchesCurrentUser = (value) => {
+  const currentTokens = currentUserTokens.value;
+  if (!currentTokens.size) return false;
+  return collectUserTokens(value).some((token) => currentTokens.has(token));
+};
+
+const isProjectManager = computed(() => {
+  return projectManagerMembers.value.some((member) =>
+    userValueMatchesCurrentUser(member)
+  );
+});
+
+const batchAttachmentSummaryText = computed(() => {
+  const count = batchAttachmentEntries.value.length;
+  return isProjectManager.value
+    ? `当前批次共汇总 ${count} 个附件，支持置顶、查看、下载、编辑和删除。`
+    : `当前批次共汇总 ${count} 个附件，支持置顶、查看和下载。`;
+});
 
 const normalizeBatchNo = (value) => {
   if (value === null || value === undefined) return '';
@@ -1151,6 +1674,8 @@ const currentProject = computed(() => {
   );
 });
 
+const delayRequestCount = computed(() => delayRequests.value.length);
+
 const batchCards = computed(() => {
   const grouped = new Map();
   currentProject.value.records.forEach((record) => {
@@ -1367,21 +1892,97 @@ const editNodeOrderHint = computed(() => {
   return `保存后会按新的序号重排当前批次该主阶段的 ${count} 个节点`;
 });
 
-// 当前项目标题
-const currentProjectLabel = computed(() => {
-  const name = currentProject.value.projectName || '暂无项目';
-  const code = currentProject.value.projectCode;
-  return code ? `${name} (${code})` : name;
+const projectSummaryMap = computed(() => {
+  const map = new Map();
+  projectSummaryRecords.value.forEach((item) => {
+    const code = normalizeLabel(item?.project_code);
+    const name = normalizeLabel(item?.project_name);
+    const type = normalizeLabel(item?.project_type);
+    if (code) {
+      map.set(`code:${code}`, item);
+    }
+    if (name) {
+      map.set(`name:${name}`, item);
+    }
+    if (code || name || type) {
+      map.set(`full:${code}||${name}||${type}`, item);
+    }
+  });
+  return map;
 });
+
+const getProjectSummaryCode = (project) => normalizeLabel(project?.projectCode || project?.project_code);
+
+const getProjectSummaryOrderNo = (summary) =>
+  normalizeLabel(
+    summary?.order_no ||
+    summary?.contract_name ||
+    summary?.['订单号'] ||
+    summary?.['合同名称'] ||
+    summary?._widget_1769064437829
+  );
+
+const projectOrderNoMap = computed(() => {
+  const map = new Map();
+  projectSummaryRecords.value.forEach((item) => {
+    const code = normalizeLabel(item?.project_code || item?.['项目编号'] || item?._widget_1769064437789);
+    const orderNo = getProjectSummaryOrderNo(item);
+    if (code && orderNo) {
+      map.set(code, orderNo);
+    }
+  });
+  return map;
+});
+
+const getProjectSummary = (project) => {
+  const code = normalizeLabel(project?.projectCode);
+  const name = normalizeLabel(project?.projectName);
+  const type = normalizeLabel(project?.projectType);
+  return (
+    (code && projectSummaryMap.value.get(`code:${code}`)) ||
+    (name && projectSummaryMap.value.get(`name:${name}`)) ||
+    projectSummaryMap.value.get(`full:${code}||${name}||${type}`) ||
+    null
+  );
+};
+
+const currentProjectSummary = computed(() => getProjectSummary(currentProject.value) || {});
+
+const getProjectOrderNo = (project) => {
+  const code = getProjectSummaryCode(project);
+  if (code && projectOrderNoMap.value.has(code)) {
+    return projectOrderNoMap.value.get(code);
+  }
+  const summary = getProjectSummary(project);
+  return getProjectSummaryOrderNo(summary);
+};
+
+// 当前项目标题
+const currentProjectLabel = computed(() => getProjectOrderNo(currentProject.value) || '未找到订单号');
+
+const currentProjectBusinessOwner = computed(
+  () =>
+    currentProjectSummary.value?.business_owner ||
+    currentProjectSummary.value?.businessOwner ||
+    currentProject.value?.business_owner ||
+    currentProject.value?.businessOwner ||
+    ''
+);
+
+const isCurrentProjectBusinessOwner = computed(() =>
+  userValueMatchesCurrentUser(currentProjectBusinessOwner.value)
+);
+
+const buildProjectOptionLabel = (project) => {
+  return getProjectOrderNo(project) || '未找到订单号';
+};
 
 // 项目下拉选项
 const projectOptions = computed(() =>
   groupedProjects.value.map((item) => {
-    const name = item.projectName || '未命名项目';
-    const code = item.projectCode ? ` (${item.projectCode})` : '';
     return {
       key: item.key,
-      label: `${name}${code}`
+      label: buildProjectOptionLabel(item)
     };
   })
 );
@@ -1418,6 +2019,8 @@ const normalizeNode = (record, index) => {
     warningLevel: record.warning_level || '正常',
     executorName: formatUser(record.executor),
     executorRaw: record.executor,
+    approverName: formatUser(record.approver),
+    approverRaw: record.approver,
     executionNote: normalizeLabel(record.execution_note),
     overdueReason: normalizeLabel(record.overdue_reason),
     siteUploadRaw: record.site_upload,
@@ -1457,6 +2060,29 @@ const timelineNodes = computed(() => {
     ordered.push(...(grouped.get(key) || []));
   });
   return ordered;
+});
+
+const delayAffectedNodes = computed(() => {
+  if (!canManageNode(delayRow.value)) return [];
+  const startIndex = timelineNodes.value.findIndex(
+    (node) => node.recordId && node.recordId === delayRow.value.recordId
+  );
+  if (startIndex < 0) return [];
+  return timelineNodes.value
+    .slice(startIndex)
+    .filter((node) => canManageNode(node));
+});
+
+const delayAffectedPreviewNodes = computed(() => delayAffectedNodes.value.slice(0, 8));
+
+const delayScopeHint = computed(() => {
+  if (!delayRow.value) return '请选择要延期的节点';
+  const count = delayAffectedNodes.value.length;
+  if (!count) return '当前批次未找到可延期的后续节点';
+  if (count === 1) {
+    return `将顺延当前节点的计划时间 ${parsePositiveInt(delayForm.value.days) || 1} 天`;
+  }
+  return `将顺延当前批次从该节点开始的 ${count} 个节点，后续节点会一并延后`;
 });
 
 // 表格数据（按主阶段分组）
@@ -1608,6 +2234,7 @@ const overallProgressType = computed(() => (warningLevelCount.value > 0 ? 'dange
 // 状态标签样式
 const getStatusTag = (status) => {
   if (status === '完成' || status === '超期完成') return 'success';
+  if (status === '待审批' || status === '超期待审批') return 'warning';
   if (status === '超期') return 'danger';
   return 'info';
 };
@@ -1629,7 +2256,35 @@ const getWarningTag = (level) => {
   return 'success';
 };
 
-const canManageNode = (row) => Boolean(row && !row.isGroup && row.recordId && getProjectStageLabel(row));
+const ensureProjectManagerAction = (message = '仅项目管理员可操作') => {
+  if (isProjectManager.value) return true;
+  ElMessage.warning(message);
+  return false;
+};
+
+const ensureDelayRequestReviewerAction = (message = '仅当前项目商务负责人可审核延期申请') => {
+  if (isCurrentProjectBusinessOwner.value) return true;
+  ElMessage.warning(message);
+  return false;
+};
+
+const buildCurrentReviewerPayload = () => ({
+  user_id: userProfile.value.user_id || userParam.value || '',
+  userid: userProfile.value.userid || '',
+  userId: userProfile.value.userId || '',
+  name: userProfile.value.name || '',
+  username: userProfile.value.username || '',
+  user_name: userProfile.value.user_name || '',
+  nickname: userProfile.value.nickname || '',
+  realname: userProfile.value.realname || '',
+  account: userProfile.value.account || '',
+  uniqueid: userProfile.value.uniqueid || '',
+  mobile: userProfile.value.mobile || '',
+  email: userProfile.value.email || ''
+});
+
+const canManageNode = (row) =>
+  Boolean(isProjectManager.value && row && !row.isGroup && row.recordId && getProjectStageLabel(row));
 
 const summarizeMutationResults = (results) => {
   const successCount = results.filter(
@@ -1675,7 +2330,8 @@ const buildNodeCreatePayload = ({
   orderNo,
   planStart,
   planEnd,
-  executorIds
+  executorIds,
+  approverId
 }) => ({
   project_code: normalizeLabel(currentProject.value.projectCode),
   project_name: normalizeLabel(currentProject.value.projectName),
@@ -1687,6 +2343,7 @@ const buildNodeCreatePayload = ({
   project_stage: nodeName,
   project_stage_order: orderNo,
   executor: executorIds,
+  approver: approverId || '',
   plan_time: planStart || '',
   plan_finishtime: planEnd || '',
   status: '未完成',
@@ -1697,36 +2354,214 @@ const buildNodeCreatePayload = ({
   overdue_reason: ''
 });
 
+const PROJECT_PROGRESS_PAGE_SIZE = 300;
+const MAX_FETCH_PAGES = 20;
+
+const fetchAllPages = async (fetcher, pageSize, params = {}) => {
+  const records = [];
+  for (let page = 0; page < MAX_FETCH_PAGES; page += 1) {
+    const result = await fetcher({
+      ...params,
+      skip: page * pageSize,
+      limit: pageSize
+    });
+    if (result?.code !== 200 || !Array.isArray(result.data)) {
+      return {
+        ok: false,
+        data: records,
+        msg: result?.msg || '加载数据失败'
+      };
+    }
+    records.push(...result.data);
+    if (result.data.length < pageSize) {
+      return {
+        ok: true,
+        data: records
+      };
+    }
+  }
+  return {
+    ok: true,
+    data: records
+  };
+};
+
+const loadAllProgressRecords = (search = '') =>
+  fetchAllPages(api.listProjectProgress, PROJECT_PROGRESS_PAGE_SIZE, { search });
+
+const loadAllProjectSummaryRecords = (search = '') =>
+  fetchAllPages(api.listProjectSummary, PROJECT_PROGRESS_PAGE_SIZE, { search });
+
 // 拉取进度数据
 const loadProgressRecords = async (search = '') => {
   loading.value = true;
   try {
-    const result = await api.listProjectProgress({
-      skip: 0,
-      limit: 300,
-      search
-    });
-    if (result?.code === 200 && Array.isArray(result.data)) {
-      progressRecords.value = result.data;
+    const [progressResult, projectSummaryResult] = await Promise.all([
+      loadAllProgressRecords(search),
+      loadAllProjectSummaryRecords()
+    ]);
+
+    if (progressResult.ok) {
+      progressRecords.value = progressResult.data;
     } else {
       progressRecords.value = [];
-      ElMessage.error(result?.msg || '加载进度数据失败');
+      ElMessage.error(progressResult.msg || '加载进度数据失败');
+    }
+    if (projectSummaryResult.ok) {
+      projectSummaryRecords.value = projectSummaryResult.data;
+    } else {
+      projectSummaryRecords.value = [];
+      console.warn('加载项目简要信息失败：', projectSummaryResult.msg);
     }
   } catch (error) {
     console.error('加载进度数据失败：', error);
     progressRecords.value = [];
+    projectSummaryRecords.value = [];
     ElMessage.error('加载进度数据失败');
   } finally {
     loading.value = false;
   }
 };
 
+const loadProjectManagers = async () => {
+  if (projectManagerLoading.value) return;
+  projectManagerLoading.value = true;
+  try {
+    const result = await api.listProjectManagers();
+    if (result?.code === 200 && Array.isArray(result.data)) {
+      projectManagerMembers.value = result.data;
+    } else {
+      projectManagerMembers.value = [];
+      ElMessage.warning(result?.msg || '项目管理员权限加载失败，当前按只读模式处理');
+    }
+  } catch (error) {
+    console.error('加载项目管理员成员失败：', error);
+    projectManagerMembers.value = [];
+    ElMessage.warning('项目管理员权限加载失败，当前按只读模式处理');
+  } finally {
+    projectManagerLoading.value = false;
+  }
+};
+
+const resolveUserProfile = async () => {
+  if (!userParam.value) return;
+  try {
+    const result = await api.getUserInfo(userParam.value);
+    if (result?.code === 200 && result.data) {
+      userProfile.value = {
+        ...result.data,
+        user_id: result.data.user_id || result.data._id || result.data.id || userParam.value,
+        name: result.data.name || '',
+        account: result.data.account || ''
+      };
+      return;
+    }
+  } catch (error) {
+    console.warn('用户信息查询失败，尝试使用项目管理员列表匹配。', error);
+  }
+
+  const matchedMember = projectManagerMembers.value.find(
+    (item) =>
+      isSameUserToken(item?.user_id, userParam.value) ||
+      isSameUserToken(item?.account, userParam.value) ||
+      isSameUserToken(item?.name, userParam.value) ||
+      isSameUserToken(item?.uniqueid, userParam.value)
+  );
+
+  if (matchedMember) {
+    userProfile.value = {
+      ...matchedMember,
+      user_id: matchedMember.user_id || userParam.value,
+      name: matchedMember.name || '',
+      account: matchedMember.account || ''
+    };
+    return;
+  }
+
+  try {
+    const result = await api.listUsers();
+    if (result?.code === 200 && Array.isArray(result.data)) {
+      const match = result.data.find(
+        (item) =>
+          isSameUserToken(item?.user_id, userParam.value) ||
+          isSameUserToken(item?.account, userParam.value) ||
+          isSameUserToken(item?.name, userParam.value) ||
+          isSameUserToken(item?.uniqueid, userParam.value)
+      );
+      if (match) {
+        userProfile.value = {
+          ...match,
+          user_id: match.user_id || userParam.value,
+          name: match.name || '',
+          account: match.account || ''
+        };
+      }
+    }
+  } catch (error) {
+    console.warn('成员列表匹配失败。', error);
+  }
+};
+
+const syncCurrentUser = async () => {
+  const nextUserId = resolveWebpageUserId(route);
+  if (nextUserId === userParam.value) {
+    return;
+  }
+
+  userParam.value = nextUserId;
+  userProfile.value = {
+    user_id: '',
+    name: '',
+    account: ''
+  };
+
+  if (!userParam.value) {
+    ElMessage.warning('未获取到用户ID，当前按只读模式处理');
+    return;
+  }
+
+  await resolveUserProfile();
+};
+
+const loadDelayRequests = async () => {
+  if (!isCurrentProjectBusinessOwner.value) {
+    delayRequests.value = [];
+    return;
+  }
+  if (!currentProject.value.projectCode && !currentProject.value.projectName) {
+    delayRequests.value = [];
+    return;
+  }
+
+  delayRequestReviewLoading.value = true;
+  try {
+    const result = await api.listProjectDelayRequests({
+      projectCode: currentProject.value.projectCode || '',
+      projectName: currentProject.value.projectName || '',
+      status: 'pending'
+    });
+    if (result?.code === 200 && Array.isArray(result.data)) {
+      delayRequests.value = result.data;
+    } else {
+      delayRequests.value = [];
+      ElMessage.error(result?.msg || '加载延期申请失败');
+    }
+  } catch (error) {
+    console.error('加载延期申请失败：', error);
+    delayRequests.value = [];
+  } finally {
+    delayRequestReviewLoading.value = false;
+  }
+};
+
 // 搜索项目进度
 const handleSearch = async () => {
   await loadProgressRecords(searchQuery.value.trim());
+  await loadDelayRequests();
 };
 
 const openCreateNodeDialog = (row = null) => {
+  if (!ensureProjectManagerAction()) return;
   if (!currentProject.value.records.length || !currentBatchDescriptor.value) {
     ElMessage.warning('当前项目暂无可新增节点的数据');
     return;
@@ -1764,11 +2599,13 @@ const openCreateNodeDialog = (row = null) => {
 };
 
 const handleCreateNode = async () => {
+  if (!ensureProjectManagerAction()) return;
   const stageOption = createNodeStageOption.value;
   const nodeName = normalizeLabel(createNodeForm.value.nodeName);
   const orderNo = parsePositiveInt(createNodeForm.value.orderNo);
   const targetBatches = getTargetBatchDescriptors(createNodeForm.value.syncAllBatches);
   const executorIds = normalizeIdList(createNodeForm.value.executorIds);
+  const approverId = normalizeLabel(createNodeForm.value.approverId);
   const maxOrder = createNodeOrderMax.value;
 
   if (!stageOption) {
@@ -1825,7 +2662,8 @@ const handleCreateNode = async () => {
           orderNo,
           planStart: normalizeLabel(createNodeForm.value.planStart),
           planEnd: normalizeLabel(createNodeForm.value.planEnd),
-          executorIds
+          executorIds,
+          approverId
         })
       );
 
@@ -1890,6 +2728,7 @@ const hasDuplicatedBatchName = (batchName, excludeKey = '') =>
   );
 
 const openCreateBatchDialog = () => {
+  if (!ensureProjectManagerAction()) return;
   if (!currentProject.value.records.length) {
     ElMessage.warning('当前项目暂无可新增批次的节点');
     return;
@@ -1907,6 +2746,7 @@ const openCreateBatchDialog = () => {
 };
 
 const openEditBatchDialog = () => {
+  if (!ensureProjectManagerAction()) return;
   if (!currentBatchCard.value) {
     ElMessage.warning('请先选择要编辑的批次');
     return;
@@ -1931,6 +2771,7 @@ const buildBatchCreatePayload = (record, batchNo, batchName) => {
     project_stage: normalizeLabel(record.project_stage || record.projectStage || record.stage),
     project_stage_order: record.project_stage_order ?? '',
     executor: record.executor || [],
+    approver: record.approver || '',
     plan_time: record.plan_time ?? '',
     plan_finishtime: record.plan_finishtime ?? '',
     status: '未完成',
@@ -1946,6 +2787,7 @@ const buildBatchCreatePayload = (record, batchNo, batchName) => {
 };
 
 const handleCreateBatch = async () => {
+  if (!ensureProjectManagerAction()) return;
   const batchNo = parseBatchNoNumber(createBatchForm.value.batchNo);
   const batchName = normalizeLabel(createBatchForm.value.batchName);
 
@@ -2006,6 +2848,7 @@ const handleCreateBatch = async () => {
 };
 
 const handleEditBatch = async () => {
+  if (!ensureProjectManagerAction()) return;
   const sourceKey = editBatchSourceKey.value;
   const sourceBatch = batchCards.value.find((item) => item.key === sourceKey);
   if (!sourceBatch) {
@@ -2108,6 +2951,16 @@ watch(editDialogVisible, (visible) => {
   };
 });
 
+watch(delayDialogVisible, (visible) => {
+  if (visible) return;
+  delayRow.value = null;
+  delayForm.value = buildEmptyDelayForm();
+});
+
+watch(currentProjectKey, () => {
+  loadDelayRequests();
+});
+
 watch(
   () => [editDialogVisible.value, editNodeOrderMax.value],
   ([visible]) => {
@@ -2136,6 +2989,22 @@ watch(editBatchDialogVisible, (visible) => {
     batchName: ''
   };
 });
+
+watch(
+  currentBatchAttachmentScopeKey,
+  () => {
+    batchAttachmentPinnedIds.value = loadBatchAttachmentPinnedIds();
+  },
+  { immediate: true }
+);
+
+watch(
+  () => route.fullPath,
+  async () => {
+    await syncCurrentUser();
+    await loadDelayRequests();
+  }
+);
 
 // 拉取成员列表
 const loadMembers = async () => {
@@ -2167,19 +3036,224 @@ const previewAttachmentImage = (item) => {
   imagePreviewVisible.value = true;
 };
 
-const downloadAttachment = (item) => {
-  if (!item?.url) {
+const openBatchAttachmentDialog = () => {
+  batchAttachmentPinnedIds.value = loadBatchAttachmentPinnedIds();
+  batchAttachmentDialogVisible.value = true;
+};
+
+const toggleBatchAttachmentPin = (item) => {
+  const pinId = String(item?.pinId || '').trim();
+  if (!pinId) return;
+  const currentIds = batchAttachmentPinnedIds.value.map((id) => String(id));
+  const nextIds = currentIds.includes(pinId)
+    ? currentIds.filter((id) => id !== pinId)
+    : [pinId, ...currentIds];
+  batchAttachmentPinnedIds.value = Array.from(new Set(nextIds));
+  saveBatchAttachmentPinnedIds(batchAttachmentPinnedIds.value);
+};
+
+const getAttachmentActionKey = (item) => `${item?.recordId || ''}::${item?.attachmentIndex ?? ''}`;
+
+const findProgressRecordById = (recordId) => {
+  const normalizedId = String(recordId || '').trim();
+  if (!normalizedId) return null;
+  return (
+    currentProject.value.records.find((record) => getProgressRecordId(record) === normalizedId) ||
+    progressRecords.value.find((record) => getProgressRecordId(record) === normalizedId) ||
+    null
+  );
+};
+
+const updateAttachmentPayloadName = (attachment, nextName) => {
+  if (attachment && typeof attachment === 'object' && !Array.isArray(attachment)) {
+    return {
+      ...attachment,
+      name: nextName,
+      file_name: nextName,
+      fileName: nextName
+    };
+  }
+
+  const text = String(attachment || '').trim();
+  if (/^https?:\/\//i.test(text)) {
+    return {
+      name: nextName,
+      url: text
+    };
+  }
+  return nextName;
+};
+
+const updateBatchAttachmentList = async (item, updater, successMessage, options = {}) => {
+  if (!ensureProjectManagerAction('仅项目管理员可管理附件')) return;
+  const recordId = String(item?.recordId || '').trim();
+  const attachmentIndex = Number(item?.attachmentIndex);
+  const record = findProgressRecordById(recordId);
+
+  if (!record || !recordId || !Number.isInteger(attachmentIndex) || attachmentIndex < 0) {
+    ElMessage.error('未找到附件所属节点');
+    return;
+  }
+
+  const attachments = normalizeAttachmentPayloadList(record.site_upload);
+  if (attachmentIndex >= attachments.length) {
+    ElMessage.error('未找到要操作的附件');
+    return;
+  }
+
+  const nextAttachments = updater(attachments, attachmentIndex);
+  if (!Array.isArray(nextAttachments)) return;
+
+  attachmentActionKey.value = getAttachmentActionKey(item);
+  try {
+    const result = await api.updateProjectProgress(recordId, {
+      site_upload: nextAttachments
+    });
+    if (result?.code === 200) {
+      ElMessage.success(successMessage);
+      if (item?.pinId) {
+        const withoutCurrentPin = batchAttachmentPinnedIds.value.filter((id) => id !== item.pinId);
+        batchAttachmentPinnedIds.value =
+          item.isPinned && options.nextPinId
+            ? Array.from(new Set([options.nextPinId, ...withoutCurrentPin]))
+            : withoutCurrentPin;
+        saveBatchAttachmentPinnedIds(batchAttachmentPinnedIds.value);
+      }
+      await loadProgressRecords(searchQuery.value.trim());
+    } else {
+      ElMessage.error(result?.msg || '附件更新失败');
+    }
+  } catch (error) {
+    console.error('附件更新失败：', error);
+    ElMessage.error(error?.message || '附件更新失败');
+  } finally {
+    attachmentActionKey.value = '';
+  }
+};
+
+const handleEditBatchAttachment = async (item) => {
+  if (!ensureProjectManagerAction('仅项目管理员可编辑附件')) return;
+  let promptResult;
+  try {
+    promptResult = await ElMessageBox.prompt('请输入新的附件名称', '编辑附件', {
+      inputValue: item?.name || '',
+      inputPattern: /\S/,
+      inputErrorMessage: '请输入附件名称',
+      confirmButtonText: '保存',
+      cancelButtonText: '取消'
+    });
+  } catch {
+    return;
+  }
+
+  const nextName = normalizeLabel(promptResult?.value);
+  if (!nextName) {
+    ElMessage.warning('请输入附件名称');
+    return;
+  }
+  if (nextName === normalizeLabel(item?.name)) {
+    ElMessage.warning('附件名称未变化');
+    return;
+  }
+
+  await updateBatchAttachmentList(
+    item,
+    (attachments, attachmentIndex) => {
+      const nextAttachments = [...attachments];
+      nextAttachments[attachmentIndex] = updateAttachmentPayloadName(nextAttachments[attachmentIndex], nextName);
+      return nextAttachments;
+    },
+    '附件已更新',
+    {
+      nextPinId: buildBatchAttachmentPinId(
+        { ...item, name: nextName },
+        { recordId: item?.recordId || '' },
+        item?.attachmentIndex ?? ''
+      )
+    }
+  );
+};
+
+const handleDeleteBatchAttachment = async (item) => {
+  if (!ensureProjectManagerAction('仅项目管理员可删除附件')) return;
+  try {
+    await ElMessageBox.confirm(
+      `确认删除附件“${item?.name || '附件'}”吗？`,
+      '删除附件',
+      {
+        type: 'warning',
+        confirmButtonText: '确定删除',
+        cancelButtonText: '取消'
+      }
+    );
+  } catch {
+    return;
+  }
+
+  await updateBatchAttachmentList(
+    item,
+    (attachments, attachmentIndex) => attachments.filter((_, index) => index !== attachmentIndex),
+    '附件已删除'
+  );
+};
+
+const viewBatchAttachment = (item) => {
+  if (!item) return;
+  if (item.isImage && item.url) {
+    previewAttachmentImage(item);
+    return;
+  }
+  const targetUrl = item.originalUrl || item.downloadUrl || item.url;
+  if (!targetUrl) {
+    ElMessage.warning('该附件暂无可查看地址');
+    return;
+  }
+  window.open(targetUrl, '_blank', 'noopener,noreferrer');
+};
+
+const downloadAttachment = async (item) => {
+  if (!item?.canDownload) {
     ElMessage.warning('该附件暂无可下载地址');
     return;
   }
-  const link = document.createElement('a');
-  link.href = item.url;
-  link.target = '_blank';
-  link.rel = 'noopener noreferrer';
-  link.download = item.name || '附件';
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
+
+  let objectUrl = '';
+  try {
+    const response = await fetch(
+      api.getProjectProgressAttachmentDownloadUrl({
+        url: item.url,
+        originalUrl: item.originalUrl,
+        downloadUrl: item.downloadUrl,
+        fileKey: item.fileKey,
+        name: item.name || '附件'
+      })
+    );
+
+    if (!response.ok) {
+      let message = `下载失败（${response.status}）`;
+      try {
+        const payload = await response.json();
+        message = payload?.msg || message;
+      } catch (parseError) {
+        console.warn('解析下载失败响应失败：', parseError);
+      }
+      throw new Error(message);
+    }
+
+    const contentDisposition = response.headers.get('Content-Disposition');
+    const fallbackName = parseAttachmentFilename(contentDisposition) || item.name || '附件';
+    const rawBlob = await response.blob();
+    const fileBlob = new Blob([rawBlob], { type: 'application/octet-stream' });
+    objectUrl = window.URL.createObjectURL(fileBlob);
+    triggerDownload(objectUrl, fallbackName);
+  } catch (error) {
+    console.error('下载附件失败：', error);
+    ElMessage.error(error?.message || '下载附件失败');
+  } finally {
+    if (objectUrl) {
+      window.setTimeout(() => window.URL.revokeObjectURL(objectUrl), 1000);
+    }
+  }
 };
 
 const handleDeleteNode = async (row) => {
@@ -2251,6 +3325,244 @@ const openDetailDialog = (row) => {
   detailDialogVisible.value = true;
 };
 
+const openDelayDialog = (row) => {
+  if (!canManageNode(row)) {
+    ElMessage.warning('仅支持对具体节点执行延期');
+    return;
+  }
+  delayRow.value = row;
+  delayForm.value = buildEmptyDelayForm();
+  delayDialogVisible.value = true;
+};
+
+const buildDelayPayload = (node, days) => {
+  const payload = {};
+  const shiftedPlanTime = shiftPlanTimeValue(node.rawPlanTime, days);
+  const shiftedPlanEnd = addDaysToDate(node.planEndRaw, days);
+
+  if (JSON.stringify(shiftedPlanTime) !== JSON.stringify(node.rawPlanTime)) {
+    payload.plan_time = shiftedPlanTime;
+  }
+  if (node.planEndRaw && shiftedPlanEnd && shiftedPlanEnd !== formatDate(node.planEndRaw)) {
+    payload.plan_finishtime = shiftedPlanEnd;
+  }
+  return payload;
+};
+
+const handleApplyDelay = async () => {
+  if (!canManageNode(delayRow.value)) {
+    ElMessage.error('请选择要延期的节点');
+    return;
+  }
+
+  const delayDays = parsePositiveInt(delayForm.value.days);
+  if (!delayDays) {
+    ElMessage.warning('请输入大于 0 的延期天数');
+    return;
+  }
+
+  const affectedNodes = delayAffectedNodes.value;
+  if (!affectedNodes.length) {
+    ElMessage.warning('当前没有可延期的节点');
+    return;
+  }
+
+  delayingNodes.value = true;
+  let skippedCount = 0;
+  try {
+    const preparedNodes = affectedNodes.reduce((list, node) => {
+      const payload = buildDelayPayload(node, delayDays);
+      if (!node.recordId || !Object.keys(payload).length) {
+        skippedCount += 1;
+        return list;
+      }
+      list.push({
+        record_id: node.recordId,
+        main_stage_label: node.mainStageLabel || '',
+        node_label: node.nodeLabel || node.name || '',
+        before_plan_start: node.planStart || '',
+        after_plan_start: addDaysToDate(node.planStartRaw, delayDays),
+        before_plan_end: node.planEnd || '',
+        after_plan_end: addDaysToDate(node.planEndRaw, delayDays),
+        executor_ids: getExecutorIds(node.executorRaw),
+        executor_raw: node.executorRaw,
+        payload
+      });
+      return list;
+    }, []);
+
+    if (!preparedNodes.length) {
+      ElMessage.warning('所选节点及后续节点暂无可延期的计划日期');
+      return;
+    }
+
+    const result = await api.delayProjectProgress({
+      project_name: currentProject.value.projectName || delayRow.value.projectName || '',
+      project_code: currentProject.value.projectCode || delayRow.value.projectCode || '',
+      batch_no: currentBatchDescriptor.value?.batchNo || delayRow.value.batchNo || '',
+      batch_name: currentBatchDescriptor.value?.batchName || delayRow.value.batchName || '',
+      delay_days: delayDays,
+      nodes: preparedNodes
+    });
+
+    const summary = result?.data || {};
+    const updatedCount = Number(summary.updated_count || 0);
+    const failedCount = Number(summary.failed_count || 0);
+    const skippedTotal = skippedCount + Number(summary.skipped_count || 0);
+    const notifiedUserCount = Number(summary.notified_user_count || 0);
+    const notifyFailedCount = Number(summary.notify_failed_count || 0);
+    const notificationDisabled = Boolean(summary.notification_disabled);
+    const notifyErrorSummary = String(summary.notify_error_summary || '').trim();
+
+    if (updatedCount === 0) {
+      ElMessage.error('延期失败');
+      return;
+    }
+
+    if (failedCount > 0 || skippedTotal > 0 || notifyFailedCount > 0 || notificationDisabled) {
+      const messageParts = [
+        `延期完成：成功 ${updatedCount} 个节点`
+      ];
+      if (failedCount > 0) {
+        messageParts.push(`失败 ${failedCount} 个`);
+      }
+      if (skippedTotal > 0) {
+        messageParts.push(`跳过 ${skippedTotal} 个`);
+      }
+      if (notifiedUserCount > 0) {
+        messageParts.push(`已通知 ${notifiedUserCount} 位责任人`);
+      } else if (notificationDisabled) {
+        messageParts.push('钉钉通知未发送');
+      }
+      if (notifyFailedCount > 0) {
+        messageParts.push(`通知失败 ${notifyFailedCount} 位`);
+      }
+      if (notifyErrorSummary) {
+        messageParts.push(notifyErrorSummary);
+      }
+      ElMessage.warning(
+        messageParts.join('，')
+      );
+    } else {
+      ElMessage.success(
+        `延期成功：已顺延 ${updatedCount} 个节点 ${delayDays} 天，并通知 ${notifiedUserCount} 位责任人`
+      );
+    }
+
+    delayDialogVisible.value = false;
+    await loadProgressRecords(searchQuery.value.trim());
+  } catch (error) {
+    console.error('延期失败：', error);
+    ElMessage.error('延期失败');
+  } finally {
+    delayingNodes.value = false;
+  }
+};
+
+const openDelayRequestReviewDialog = async () => {
+  if (!ensureDelayRequestReviewerAction()) return;
+  delayRequestReviewDialogVisible.value = true;
+  await loadDelayRequests();
+};
+
+const handleApproveDelayRequest = async (row) => {
+  if (!ensureDelayRequestReviewerAction()) return;
+  if (!row?.request_id) {
+    ElMessage.error('缺少延期申请ID');
+    return;
+  }
+
+  try {
+    await ElMessageBox.confirm(
+      `确认通过该延期申请，并顺延 ${row.node_count || row.nodes?.length || 0} 个节点 ${row.delay_days || 0} 天吗？`,
+      '通过延期申请',
+      {
+        type: 'warning',
+        confirmButtonText: '确定',
+        cancelButtonText: '取消'
+      }
+    );
+  } catch {
+    return;
+  }
+
+  handlingDelayRequestId.value = row.request_id;
+  handlingDelayRequestAction.value = 'approve';
+  try {
+    const result = await api.approveProjectDelayRequest(row.request_id, {
+      reviewer: buildCurrentReviewerPayload()
+    });
+    if (result?.code === 200) {
+      const summary = result?.data?.summary || {};
+      const updatedCount = Number(summary.updated_count || 0);
+      const notifiedUserCount = Number(summary.notified_user_count || 0);
+      const notifyFailedCount = Number(summary.notify_failed_count || 0);
+      const notifyErrorSummary = String(summary.notify_error_summary || '').trim();
+      if (notifyFailedCount > 0) {
+        const parts = [`延期申请已通过，成功顺延 ${updatedCount} 个节点`];
+        if (notifiedUserCount > 0) {
+          parts.push(`已通知 ${notifiedUserCount} 位责任人`);
+        }
+        parts.push(`通知失败 ${notifyFailedCount} 位`);
+        if (notifyErrorSummary) {
+          parts.push(notifyErrorSummary);
+        }
+        ElMessage.warning(parts.join('，'));
+      } else {
+        ElMessage.success(`延期申请已通过，成功顺延 ${updatedCount} 个节点，并通知 ${notifiedUserCount} 位责任人`);
+      }
+      await loadDelayRequests();
+      await loadProgressRecords(searchQuery.value.trim());
+    } else {
+      ElMessage.error(result?.msg || '延期申请审核失败');
+    }
+  } catch (error) {
+    console.error('延期申请审核失败：', error);
+    ElMessage.error(error?.message || '延期申请审核失败');
+  } finally {
+    handlingDelayRequestId.value = '';
+    handlingDelayRequestAction.value = '';
+  }
+};
+
+const handleRejectDelayRequest = async (row) => {
+  if (!ensureDelayRequestReviewerAction()) return;
+  if (!row?.request_id) {
+    ElMessage.error('缺少延期申请ID');
+    return;
+  }
+
+  try {
+    await ElMessageBox.confirm('确认驳回该延期申请吗？', '驳回延期申请', {
+      type: 'warning',
+      confirmButtonText: '确定',
+      cancelButtonText: '取消'
+    });
+  } catch {
+    return;
+  }
+
+  handlingDelayRequestId.value = row.request_id;
+  handlingDelayRequestAction.value = 'reject';
+  try {
+    const result = await api.rejectProjectDelayRequest(row.request_id, {
+      reviewer: buildCurrentReviewerPayload()
+    });
+    if (result?.code === 200) {
+      ElMessage.success(result?.msg || '延期申请已驳回');
+      await loadDelayRequests();
+    } else {
+      ElMessage.error(result?.msg || '延期申请驳回失败');
+    }
+  } catch (error) {
+    console.error('延期申请驳回失败：', error);
+    ElMessage.error(error?.message || '延期申请驳回失败');
+  } finally {
+    handlingDelayRequestId.value = '';
+    handlingDelayRequestAction.value = '';
+  }
+};
+
 // 打开编辑弹窗
 const openEditDialog = async (row) => {
   if (!canManageNode(row)) {
@@ -2259,6 +3571,7 @@ const openEditDialog = async (row) => {
   }
   editRow.value = row;
   const initialExecutorIds = getExecutorIds(row.executorRaw);
+  const initialApproverId = getMemberId(row.approverRaw);
   const initialPlanStart = row.planStartRaw ? formatDate(row.planStartRaw) : row.planStart || '';
   const initialPlanEnd = row.planEndRaw ? formatDate(row.planEndRaw) : row.planEnd || '';
   editForm.value = {
@@ -2266,13 +3579,15 @@ const openEditDialog = async (row) => {
     orderNo: resolveNodePosition(row),
     planStart: initialPlanStart,
     planEnd: initialPlanEnd,
-    executorIds: initialExecutorIds
+    executorIds: initialExecutorIds,
+    approverId: initialApproverId
   };
   originalPlanRange.value = {
     planStart: initialPlanStart,
     planEnd: initialPlanEnd
   };
   originalExecutorIds.value = [...initialExecutorIds];
+  originalApproverId.value = initialApproverId;
   editDialogVisible.value = true;
   if (!members.value.length) {
     await loadMembers();
@@ -2287,6 +3602,15 @@ const openEditDialog = async (row) => {
         user_id: id,
         name: row.executorName || '未知成员'
       }))
+    ];
+  }
+  if (initialApproverId && !members.value.find((item) => item.user_id === initialApproverId)) {
+    members.value = [
+      ...members.value,
+      {
+        user_id: initialApproverId,
+        name: row.approverName || '未知成员'
+      }
     ];
   }
 };
@@ -2354,6 +3678,12 @@ const handleSaveEdit = async () => {
       payload.executor = currentExecutorIds;
     }
 
+    const currentApproverId = normalizeLabel(editForm.value.approverId);
+    const previousApproverId = normalizeLabel(originalApproverId.value);
+    if (currentApproverId !== previousApproverId) {
+      payload.approver = currentApproverId || '';
+    }
+
     const reorderedRecords = stageRecords.filter(
       (record) => getProgressRecordId(record) !== editRow.value.recordId
     );
@@ -2392,16 +3722,12 @@ const handleSaveEdit = async () => {
 
 // 页面初始化
 onMounted(async () => {
+  await loadProjectManagers();
+  await syncCurrentUser();
   await loadProgressRecords();
-  // 读取 URL 参数（调试用）
-  function getQueryParam(paramName) {
-    const urlParams = new URLSearchParams(window.location.search);
-    return urlParams.get(paramName);
-  }
-
-  // 1. 获取 ID
-  const userId = getQueryParam('webpage_user_id');
-  console.log('Webpage User ID:', userId);
+  await loadDelayRequests();
+  console.log('ProjectProgress Current URL:', window.location.href);
+  console.log('Webpage User ID:', userParam.value);
 });
 </script>
 
@@ -2893,6 +4219,105 @@ onMounted(async () => {
   max-height: 68vh;
 }
 
+.batch-attachment-summary {
+  margin-bottom: 12px;
+  font-size: 13px;
+  color: #606266;
+}
+
+.batch-attachment-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.batch-attachment-card {
+  border: 1px solid #ebeef5;
+  border-radius: 8px;
+  padding: 12px 14px;
+  background: #fff;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.batch-attachment-card.is-pinned {
+  border-color: #e6a23c;
+  background: #fff9f0;
+  box-shadow: 0 4px 14px rgba(230, 162, 60, 0.12);
+}
+
+.batch-attachment-card__main {
+  flex: 1;
+  min-width: 0;
+}
+
+.batch-attachment-card__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.batch-attachment-card__name {
+  font-size: 14px;
+  line-height: 1.4;
+  font-weight: 600;
+  color: #303133;
+  word-break: break-all;
+}
+
+.batch-attachment-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #909399;
+}
+
+.batch-attachment-card__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.delay-dialog-hint {
+  margin-top: 4px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #606266;
+}
+
+.delay-preview-list {
+  margin-top: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.delay-preview-tag {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: #f4f4f5;
+  color: #606266;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.delay-preview-more {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  color: #909399;
+  font-size: 12px;
+}
+
 
 @media (max-width: 1200px) {
   .dashboard-grid {
@@ -2921,6 +4346,16 @@ onMounted(async () => {
   .batch-card-header {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .batch-attachment-card {
+    flex-direction: column;
+  }
+
+  .batch-attachment-card__actions {
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
   }
 }
 </style>

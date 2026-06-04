@@ -76,8 +76,8 @@
           <div class="content-panel" style="grid-column: span 5;">
             <div style="position: relative;">
             <div style="position: absolute; right: 0; top: 0; z-index: 1;">
-                <el-button :icon="Plus" @click="openBudgetItemDialog()">新增成本项</el-button>
-                <el-button type="primary" :icon="Plus" @click="handleEntryCost">录入实际成本</el-button>
+                <el-button v-if="canViewAllBudgetDetails" :icon="Plus" @click="openBudgetItemDialog()">新增成本项</el-button>
+                <el-button v-if="canRecordActualCost" type="primary" :icon="Plus" @click="handleEntryCost">录入实际成本</el-button>
                 <!-- <el-button :icon="Download">导出报表</el-button> -->
               </div>
               <el-tabs v-model="activeTab">
@@ -93,6 +93,12 @@
                   >
                     <el-table-column prop="centerName" label="成本中心" width="150"></el-table-column>
                     <el-table-column prop="item" label="成本项" width="150"></el-table-column>
+                    <el-table-column label="责任人" width="140" align="center">
+                      <template #default="scope">
+                        <span v-if="!scope.row._isSummary">{{ scope.row.responsibleName || '--' }}</span>
+                        <span v-else>--</span>
+                      </template>
+                    </el-table-column>
                     <el-table-column label="序号" width="80" align="center">
                       <template #default="scope">
                         <span v-if="!scope.row._isSummary">{{ scope.row._projectStageOrder ?? '--' }}</span>
@@ -294,7 +300,7 @@
     <el-dialog
       v-model="budgetItemDialogVisible"
       :title="budgetItemDialogMode === 'create' ? '新增成本项' : '编辑成本项'"
-      width="520px"
+      width="780px"
     >
       <el-form :model="budgetItemForm" label-width="100px">
         <el-form-item label="成本中心">
@@ -331,6 +337,23 @@
             />
           </el-select>
         </el-form-item>
+        <el-form-item label="责任人">
+          <el-select
+            v-model="budgetItemForm.responsiblePersonId"
+            filterable
+            clearable
+            placeholder="请选择责任人"
+            style="width: 100%"
+            :loading="userLoading"
+          >
+            <el-option
+              v-for="item in userOptions"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            />
+          </el-select>
+        </el-form-item>
         <el-form-item :label="budgetItemDialogMode === 'create' ? '插入序号' : '成本项序号'">
           <el-input-number
             v-model="budgetItemForm.orderNo"
@@ -347,6 +370,81 @@
           <el-input v-model="budgetItemForm.budgetStandard" type="number" min="0">
             <template #append>元</template>
           </el-input>
+        </el-form-item>
+        <el-form-item
+          v-if="budgetItemDialogMode === 'edit' && canRecordActualCost"
+          label="实际成本明细"
+          class="budget-detail-form-item"
+        >
+          <div class="budget-detail-editor">
+            <div class="budget-detail-editor__header">
+              <span>当前合计：¥{{ formatMoney(budgetItemActualTotal) }}</span>
+              <el-button size="small" :icon="Plus" @click="addBudgetActualDetail">新增一行</el-button>
+            </div>
+            <el-table
+              :data="budgetItemForm.actualDetails"
+              border
+              size="small"
+              empty-text="暂无实际成本明细"
+            >
+              <el-table-column label="发生日期" min-width="140">
+                <template #default="scope">
+                  <el-date-picker
+                    v-model="scope.row.detail_date"
+                    type="date"
+                    value-format="YYYY-MM-DD"
+                    placeholder="选择日期"
+                    style="width: 100%"
+                  />
+                </template>
+              </el-table-column>
+              <el-table-column label="费用类型" min-width="130">
+                <template #default="scope">
+                  <el-select
+                    v-model="scope.row.cost_type"
+                    filterable
+                    allow-create
+                    default-first-option
+                    clearable
+                    placeholder="费用类型"
+                    style="width: 100%"
+                  >
+                    <el-option
+                      v-for="item in costTypeOptions"
+                      :key="item"
+                      :label="item"
+                      :value="item"
+                    />
+                  </el-select>
+                </template>
+              </el-table-column>
+              <el-table-column label="金额" min-width="130">
+                <template #default="scope">
+                  <el-input-number
+                    v-model="scope.row.detail_amount"
+                    :min="0"
+                    :precision="2"
+                    :step="100"
+                    controls-position="right"
+                    style="width: 100%"
+                  />
+                </template>
+              </el-table-column>
+              <el-table-column label="备注" min-width="160">
+                <template #default="scope">
+                  <el-input v-model="scope.row.detail_remark" placeholder="备注" />
+                </template>
+              </el-table-column>
+              <el-table-column label="操作" width="70" align="center">
+                <template #default="scope">
+                  <el-button type="danger" link @click="removeBudgetActualDetail(scope.$index)">删除</el-button>
+                </template>
+              </el-table-column>
+            </el-table>
+            <div class="dialog-hint">
+              保存时会按明细金额重新汇总实际发生，并同步更新成本项名称。
+            </div>
+          </div>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -406,11 +504,16 @@ import { Plus, Download } from '@element-plus/icons-vue'
 import { ElMessage, ElNotification, ElConfigProvider, ElMessageBox } from 'element-plus'
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
 import * as echarts from 'echarts'
+import { useRoute } from 'vue-router'
 import api from '../api/client'
+import { resolveWebpageUserId } from '../utils/webpageUser'
 
 const loading = ref(false)
 const allBudgetRecords = ref([])
 const projectOptions = ref([])
+const users = ref([])
+const userLoading = ref(false)
+const route = useRoute()
 const currentProject = ref('')
 const activeTab = ref('execution')
 const entryDialogVisible = ref(false)
@@ -424,6 +527,18 @@ const detailHistoryData = ref([])
 const receiveData = ref([])
 const payData = ref([])
 const budgetData = ref([])
+const budgetRoleMembers = ref([])
+const budgetNoActualEntryRoleMembers = ref([])
+const budgetRoleLoading = ref(false)
+const userParam = ref('')
+const userProfile = ref({
+  user_id: '',
+  name: '',
+  account: ''
+})
+
+const BUDGET_ALL_VIEW_ROLE_ID = '9e944f9db3bbca3e60d35680'
+const BUDGET_NO_ACTUAL_ENTRY_ROLE_ID = '2fb04dc18718bca25df50a22'
 
 const entryForm = reactive({
   centerName: '',
@@ -437,8 +552,10 @@ const budgetItemForm = reactive({
   recordId: '',
   centerName: '',
   costItem: '',
+  responsiblePersonId: '',
   orderNo: 1,
-  budgetStandard: ''
+  budgetStandard: '',
+  actualDetails: []
 })
 
 // 引用图表 DOM 元素
@@ -467,6 +584,112 @@ const moneyFormatter = new Intl.NumberFormat('zh-CN', {
 const normalizeLabel = (value) => {
   if (value === null || value === undefined) return ''
   return String(value).trim()
+}
+
+const normalizeToken = (value) => normalizeLabel(value).toLowerCase()
+
+const isSameUserToken = (left, right) => {
+  const leftToken = normalizeToken(left)
+  const rightToken = normalizeToken(right)
+  return Boolean(leftToken && rightToken && leftToken === rightToken)
+}
+
+const getMemberId = (value) => {
+  if (!value) return ''
+  if (Array.isArray(value)) {
+    const first = value.find((item) => getMemberId(item))
+    return first ? getMemberId(first) : ''
+  }
+  if (typeof value === 'object') {
+    return normalizeLabel(value.user_id || value._id || value.id)
+  }
+  return normalizeLabel(value)
+}
+
+const getMemberLabel = (value) => {
+  if (!value) return ''
+  if (Array.isArray(value)) {
+    const labels = value.map((item) => getMemberLabel(item)).filter(Boolean)
+    return Array.from(new Set(labels)).join(' / ')
+  }
+  if (typeof value === 'object') {
+    return normalizeLabel(value.name || value.realname || value.account || value.user_id || value._id || value.id)
+  }
+  return normalizeLabel(value)
+}
+
+const formatResponsiblePerson = (value) => {
+  if (!value) return ''
+  if (Array.isArray(value)) {
+    const labels = value.map((item) => formatResponsiblePerson(item)).filter(Boolean)
+    return Array.from(new Set(labels)).join(' / ')
+  }
+  if (typeof value === 'object') {
+    return getMemberLabel(value)
+  }
+  return normalizeLabel(value)
+}
+
+const extractUserTokens = (value) => {
+  if (!value) return []
+  if (Array.isArray(value)) {
+    return Array.from(new Set(value.flatMap((item) => extractUserTokens(item)).filter(Boolean)))
+  }
+  if (typeof value === 'object') {
+    return Array.from(
+      new Set(
+        [
+          value.user_id,
+          value._id,
+          value.id,
+          value.account,
+          value.name,
+          value.realname,
+          value.uniqueid
+        ]
+          .map(normalizeToken)
+          .filter(Boolean)
+      )
+    )
+  }
+  const token = normalizeToken(value)
+  return token ? [token] : []
+}
+
+const currentUserTokens = computed(() =>
+  new Set(
+    [
+      userParam.value,
+      userProfile.value.user_id,
+      userProfile.value.account,
+      userProfile.value.name
+    ]
+      .map(normalizeToken)
+      .filter(Boolean)
+  )
+)
+
+const hasCurrentUserInRole = (members) => {
+  if (!currentUserTokens.value.size) return false
+  return members.some((member) =>
+    extractUserTokens(member).some((token) => currentUserTokens.value.has(token))
+  )
+}
+
+const isNoActualEntryRole = computed(() =>
+  hasCurrentUserInRole(budgetNoActualEntryRoleMembers.value)
+)
+
+const canViewAllBudgetDetails = computed(
+  () => hasCurrentUserInRole(budgetRoleMembers.value) || isNoActualEntryRole.value
+)
+
+const canRecordActualCost = computed(() => !isNoActualEntryRole.value)
+
+const isBudgetRecordVisible = (record) => {
+  if (canViewAllBudgetDetails.value) return true
+  if (!currentUserTokens.value.size) return false
+  return extractUserTokens(record?.responsible_person).some((token) => currentUserTokens.value.has(token))
 }
 
 // 规范化阶段序号为可比较类型
@@ -531,10 +754,14 @@ const currentProjectMeta = computed(() =>
   projectOptions.value.find((item) => item.key === currentProject.value) || {}
 )
 
+const accessibleBudgetRecords = computed(() =>
+  allBudgetRecords.value.filter((record) => isBudgetRecordVisible(record))
+)
+
 // 当前项目对应的记录
 const filteredBudgetRecords = computed(() => {
   if (!currentProject.value) return []
-  return allBudgetRecords.value.filter(
+  return accessibleBudgetRecords.value.filter(
     (record) => buildProjectKey(record) === currentProject.value
   )
 })
@@ -616,6 +843,147 @@ const budgetItemCostOptions = computed(() => {
 // 费用类型下拉（固定选项）
 const costTypeOptions = ref(['材料费用', '人工费用', '其他费用'])
 
+const userOptions = computed(() =>
+  users.value
+    .map((item) => {
+      const value = getMemberId(item)
+      const label = getMemberLabel(item)
+      if (!value) return null
+      return {
+        value,
+        label: label || value
+      }
+    })
+    .filter(Boolean)
+)
+
+const ensureUserOption = (value) => {
+  const id = getMemberId(value)
+  if (!id || users.value.some((item) => getMemberId(item) === id)) return
+  users.value = [
+    ...users.value,
+    {
+      user_id: id,
+      name: getMemberLabel(value) || id
+    }
+  ]
+}
+
+const loadUsers = async () => {
+  if (userLoading.value) return
+  userLoading.value = true
+  try {
+    const result = await api.listUsers()
+    if (result?.code === 200 && Array.isArray(result.data)) {
+      users.value = result.data
+    } else {
+      users.value = []
+      ElMessage.error(result?.msg || '加载成员失败')
+    }
+  } catch (error) {
+    console.error('加载成员失败：', error)
+    users.value = []
+    ElMessage.error('加载成员失败')
+  } finally {
+    userLoading.value = false
+  }
+}
+
+const refreshProjectOptions = () => {
+  projectOptions.value = buildProjectOptions(accessibleBudgetRecords.value)
+  if (!projectOptions.value.length) {
+    currentProject.value = ''
+    return
+  }
+  if (!projectOptions.value.find((item) => item.key === currentProject.value)) {
+    currentProject.value = projectOptions.value[0].key
+  }
+}
+
+const loadBudgetRoleMembers = async () => {
+  if (budgetRoleLoading.value) return
+  budgetRoleLoading.value = true
+  try {
+    const [managerResult, noActualEntryResult] = await Promise.all([
+      api.listRoleMembers(BUDGET_ALL_VIEW_ROLE_ID),
+      api.listRoleMembers(BUDGET_NO_ACTUAL_ENTRY_ROLE_ID)
+    ])
+    budgetRoleMembers.value =
+      managerResult?.code === 200 && Array.isArray(managerResult.data) ? managerResult.data : []
+    budgetNoActualEntryRoleMembers.value =
+      noActualEntryResult?.code === 200 && Array.isArray(noActualEntryResult.data)
+        ? noActualEntryResult.data
+        : []
+    if (managerResult?.code !== 200 || noActualEntryResult?.code !== 200) {
+      ElMessage.warning('预算权限角色成员加载不完整，当前按已加载权限处理')
+    }
+  } catch (error) {
+    console.error('加载预算权限角色成员失败：', error)
+    budgetRoleMembers.value = []
+    budgetNoActualEntryRoleMembers.value = []
+    ElMessage.warning('预算权限角色成员加载失败，当前按个人视图处理')
+  } finally {
+    budgetRoleLoading.value = false
+  }
+}
+
+const resolveBudgetUserProfile = async () => {
+  if (!userParam.value) return
+  try {
+    const result = await api.getUserInfo(userParam.value)
+    if (result?.code === 200 && result.data) {
+      userProfile.value = {
+        user_id: result.data.user_id || result.data._id || result.data.id || userParam.value,
+        name: result.data.name || result.data.username || '',
+        account: result.data.account || ''
+      }
+      return
+    }
+  } catch (error) {
+    console.warn('预算页用户信息查询失败，尝试成员列表匹配。', error)
+  }
+
+  try {
+    const result = await api.listUsers()
+    if (result?.code === 200 && Array.isArray(result.data)) {
+      const match = result.data.find(
+        (item) =>
+          isSameUserToken(item.user_id, userParam.value) ||
+          isSameUserToken(item.account, userParam.value) ||
+          isSameUserToken(item.name, userParam.value) ||
+          isSameUserToken(item.uniqueid, userParam.value)
+      )
+      if (match) {
+        userProfile.value = {
+          user_id: match.user_id || userParam.value,
+          name: match.name || '',
+          account: match.account || ''
+        }
+      }
+    }
+  } catch (error) {
+    console.warn('预算页成员列表匹配失败。', error)
+  }
+}
+
+const syncBudgetCurrentUser = async () => {
+  const nextUserId = resolveWebpageUserId(route)
+  if (nextUserId === userParam.value) {
+    return
+  }
+  userParam.value = nextUserId
+  userProfile.value = {
+    user_id: '',
+    name: '',
+    account: ''
+  }
+  if (!userParam.value) {
+    ElMessage.warning('未获取到用户ID，当前按个人视图处理')
+    return
+  }
+  await resolveBudgetUserProfile()
+}
+
 // 成本中心变化时重置成本项
 watch(
   () => entryForm.centerName,
@@ -653,6 +1021,23 @@ watch(
     if (currentOrder === null || currentOrder > maxOrder) {
       budgetItemForm.orderNo = maxOrder
     }
+  }
+)
+
+watch(
+  accessibleBudgetRecords,
+  () => {
+    refreshProjectOptions()
+    refreshViewData()
+  }
+)
+
+watch(
+  () => route.fullPath,
+  async () => {
+    await syncBudgetCurrentUser()
+    refreshProjectOptions()
+    refreshViewData()
   }
 )
 
@@ -851,6 +1236,7 @@ const buildBudgetData = (records) => {
         centerName: '',
         centerLabel: center,
         item,
+        responsibleName: formatResponsiblePerson(entry.records.map((record) => record?.responsible_person).filter(Boolean)),
         costType: entry.costType || '',
         standard: entry.standard,
         actual: entry.actual,
@@ -950,6 +1336,91 @@ const formatDateTime = (date) => {
   return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`
 }
 
+const createBudgetActualDetail = (detail = {}) => ({
+  ...detail,
+  detail_date: formatDate(detail?.detail_date),
+  detail_item: normalizeLabel(detail?.detail_item),
+  cost_type:
+    normalizeCostType(detail?.cost_type) ||
+    normalizeCostType(detail?.[COST_TYPE_SUBFORM_VALUE_KEY]) ||
+    '',
+  detail_amount:
+    detail?.detail_amount === null ||
+    detail?.detail_amount === undefined ||
+    detail?.detail_amount === ''
+      ? null
+      : toNumber(detail.detail_amount),
+  detail_remark: detail?.detail_remark || ''
+})
+
+const buildEditableBudgetActualDetails = (record, costItem) => {
+  const details = Array.isArray(record?.cost_details) ? record.cost_details : []
+  if (details.length > 0) {
+    return details.map((detail) => createBudgetActualDetail(detail))
+  }
+
+  const actual = toNumber(record?.actual_total)
+  if (actual > 0) {
+    return [
+      createBudgetActualDetail({
+        detail_date: '',
+        detail_item: costItem,
+        cost_type: normalizeCostType(record?.cost_type),
+        detail_amount: actual,
+        detail_remark: ''
+      })
+    ]
+  }
+  return []
+}
+
+const addBudgetActualDetail = () => {
+  budgetItemForm.actualDetails.push(
+    createBudgetActualDetail({
+      detail_item: budgetItemForm.costItem,
+      detail_amount: null
+    })
+  )
+}
+
+const removeBudgetActualDetail = (index) => {
+  budgetItemForm.actualDetails.splice(index, 1)
+}
+
+const isBudgetActualDetailBlank = (detail) => {
+  const hasAmount =
+    detail?.detail_amount !== null &&
+    detail?.detail_amount !== undefined &&
+    detail?.detail_amount !== ''
+  return (
+    !normalizeLabel(detail?.detail_date) &&
+    !normalizeLabel(detail?.cost_type) &&
+    !hasAmount &&
+    !normalizeLabel(detail?.detail_remark)
+  )
+}
+
+const buildBudgetActualDetailsPayload = (costItem) => {
+  const details = []
+  for (const detail of budgetItemForm.actualDetails) {
+    if (isBudgetActualDetailBlank(detail)) continue
+    const amount = toNumber(detail?.detail_amount)
+    if (amount < 0) {
+      return { valid: false, details: [], actualTotal: 0 }
+    }
+    details.push({
+      ...detail,
+      detail_date: normalizeLabel(detail?.detail_date),
+      detail_item: costItem,
+      cost_type: normalizeLabel(detail?.cost_type),
+      detail_amount: amount,
+      detail_remark: normalizeLabel(detail?.detail_remark)
+    })
+  }
+  const actualTotal = details.reduce((sum, detail) => sum + toNumber(detail.detail_amount), 0)
+  return { valid: true, details, actualTotal }
+}
+
 // 根据明细生成付款记录
 const buildPayData = (records) => {
   const items = []
@@ -1002,12 +1473,21 @@ const resetBudgetItemForm = () => {
   budgetItemForm.recordId = ''
   budgetItemForm.centerName = ''
   budgetItemForm.costItem = ''
+  budgetItemForm.responsiblePersonId = ''
   budgetItemForm.orderNo = 1
   budgetItemForm.budgetStandard = ''
+  budgetItemForm.actualDetails = []
 }
 
 const canManageBudgetRow = (row) =>
-  Boolean(row && !row._isSummary && row._record && row._recordId && row._recordCount === 1)
+  Boolean(
+    canViewAllBudgetDetails.value &&
+      row &&
+      !row._isSummary &&
+      row._record &&
+      row._recordId &&
+      row._recordCount === 1
+  )
 
 const findFilteredBudgetRecordById = (recordId) =>
   filteredBudgetRecords.value.find((record) => getBudgetRecordId(record) === String(recordId))
@@ -1092,6 +1572,13 @@ const budgetItemOrderHint = computed(() => {
   return `保存后会按新的序号重排当前成本中心下的成本项，范围 1 - ${budgetItemOrderMax.value}`
 })
 
+const budgetItemActualTotal = computed(() =>
+  budgetItemForm.actualDetails.reduce((sum, detail) => {
+    if (isBudgetActualDetailBlank(detail)) return sum
+    return sum + toNumber(detail?.detail_amount)
+  }, 0)
+)
+
 const hasDuplicatedBudgetItem = ({ centerName, costItem, excludeRecordId = '' }) =>
   filteredBudgetRecords.value.some((record) => {
     const recordId = String(record._id || record.id || '')
@@ -1157,6 +1644,10 @@ const resolveCreateBudgetOrders = (centerName) => {
 }
 
 const openBudgetItemDialog = (row = null, mode = 'create') => {
+  if (!canViewAllBudgetDetails.value) {
+    ElMessage.warning('当前仅支持查看本人负责的成本明细与录入实际成本')
+    return
+  }
   if (!currentProject.value) {
     ElMessage.warning('请先选择项目')
     return
@@ -1182,8 +1673,17 @@ const openBudgetItemDialog = (row = null, mode = 'create') => {
       budgetItemForm.recordId = row._recordId
       budgetItemForm.centerName = centerName
       budgetItemForm.costItem = row.item || normalizeLabel(record?.cost_item)
+      budgetItemForm.responsiblePersonId = getMemberId(record?.responsible_person)
       budgetItemForm.orderNo = resolveBudgetRecordPosition(record)
       budgetItemForm.budgetStandard = String(toNumber(record?.budget_standard))
+      budgetItemForm.actualDetails = buildEditableBudgetActualDetails(
+        record,
+        budgetItemForm.costItem
+      )
+      if (canRecordActualCost.value && !budgetItemForm.actualDetails.length) {
+        addBudgetActualDetail()
+      }
+      ensureUserOption(record?.responsible_person)
     } else {
       budgetItemDialogMode.value = 'create'
       budgetItemForm.centerName = centerName
@@ -1209,22 +1709,18 @@ const loadBudgetRecords = async () => {
     const result = await api.listProjectBudgets({ skip: 0, limit: 300 })
     if (result?.code === 200 && Array.isArray(result.data)) {
       allBudgetRecords.value = result.data
-      projectOptions.value = buildProjectOptions(result.data)
-      if (
-        projectOptions.value.length > 0 &&
-        !projectOptions.value.find((item) => item.key === currentProject.value)
-      ) {
-        currentProject.value = projectOptions.value[0].key
-      }
+      refreshProjectOptions()
     } else {
       allBudgetRecords.value = []
       projectOptions.value = []
+      currentProject.value = ''
       ElMessage.error(result?.msg || '加载预算数据失败')
     }
   } catch (error) {
     console.error('加载预算数据失败：', error)
     allBudgetRecords.value = []
     projectOptions.value = []
+    currentProject.value = ''
     ElMessage.error('加载预算数据失败')
   } finally {
     loading.value = false
@@ -1239,6 +1735,10 @@ const handleProjectChange = () => {
 
 // 校验后打开录入弹窗
 const handleEntryCost = () => {
+  if (!canRecordActualCost.value) {
+    ElMessage.warning('当前角色无权录入实际成本')
+    return
+  }
   if (!currentProject.value) {
     ElMessage.warning('请先选择项目')
     return
@@ -1283,6 +1783,10 @@ const resetEntryForm = () => {
 }
 
 const submitBudgetItem = async () => {
+  if (!canViewAllBudgetDetails.value) {
+    ElMessage.warning('当前无权编辑成本项')
+    return
+  }
   if (!currentProject.value) {
     ElMessage.warning('请先选择项目')
     return
@@ -1329,6 +1833,7 @@ const submitBudgetItem = async () => {
         cost_item: costItem,
         main_stage_order: orderMeta.mainStageOrder,
         project_stage_order: tempOrder,
+        responsible_person: budgetItemForm.responsiblePersonId || '',
         budget_standard: budgetStandard,
         actual_total: 0,
         status: resolveBudgetStatus(0, budgetStandard),
@@ -1383,21 +1888,32 @@ const submitBudgetItem = async () => {
         ElMessage.error('未找到要编辑的成本项')
         return
       }
-      const nextDetails = Array.isArray(record.cost_details)
-        ? record.cost_details.map((detail) => ({
-            ...detail,
-            detail_item: costItem
-          }))
-        : []
-      const currentActual = getRecordActual(record)
+      const actualPayload = canRecordActualCost.value
+        ? buildBudgetActualDetailsPayload(costItem)
+        : {
+            valid: true,
+            actualTotal: getRecordActual(record),
+            details: Array.isArray(record.cost_details)
+              ? record.cost_details.map((detail) => ({
+                  ...detail,
+                  detail_item: costItem
+                }))
+              : []
+          }
+      if (!actualPayload.valid) {
+        ElMessage.warning('实际成本明细金额不能小于0')
+        return
+      }
+      const newActual = actualPayload.actualTotal
       const currentCenter = normalizeLabel(record.cost_center)
       const payload = {
         cost_center: centerName,
         cost_item: costItem,
+        responsible_person: budgetItemForm.responsiblePersonId || '',
         budget_standard: budgetStandard,
-        actual_total: currentActual,
-        status: resolveBudgetStatus(currentActual, budgetStandard),
-        cost_details: nextDetails
+        actual_total: newActual,
+        status: resolveBudgetStatus(newActual, budgetStandard),
+        cost_details: actualPayload.details
       }
       if (centerName === currentCenter) {
         const siblings = getCenterBudgetRecords(centerName, recordId)
@@ -1532,6 +2048,10 @@ const handleDeleteBudgetItem = async (row) => {
 
 // 提交成本录入并刷新数据
 const submitEntry = async () => {
+  if (!canRecordActualCost.value) {
+    ElMessage.warning('当前角色无权录入实际成本')
+    return
+  }
   if (!currentProject.value) {
     ElMessage.warning('请先选择项目')
     return
@@ -1795,6 +2315,8 @@ const handleResize = () => {
 
 // 挂载时加载数据并绑定监听
 onMounted(async () => {
+  await Promise.all([loadUsers(), loadBudgetRoleMembers()])
+  await syncBudgetCurrentUser()
   await loadBudgetRecords()
   window.addEventListener('resize', handleResize)
 })
@@ -1913,6 +2435,23 @@ onUnmounted(() => {
   font-size: 12px;
   line-height: 1.5;
   color: #909399;
+}
+
+.budget-detail-form-item :deep(.el-form-item__content) {
+  display: block;
+}
+
+.budget-detail-editor {
+  width: 100%;
+}
+
+.budget-detail-editor__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  font-weight: 600;
+  color: #303133;
 }
 
 /* 表格样式微调 - 注意：scoped 样式下修改 element 内部样式需要使用 :deep() */

@@ -158,9 +158,14 @@ const toNumber = (value) => {
   return Number.isFinite(numeric) ? numeric : 0;
 };
 
+const moneyFormatter = new Intl.NumberFormat('zh-CN', {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2
+});
+
 const formatMoney = (val) => {
   const amount = toNumber(val);
-  return amount.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return moneyFormatter.format(amount);
 };
 
 const buildProjectKey = (record) => {

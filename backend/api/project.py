@@ -21,17 +21,17 @@ def list_projects():
         
         filter_obj = None
         if search:
-            # 按项目名称或编号搜索
+            # 按订单号或项目编号搜索
             filter_obj = {
                 'rel': 'or',
                 'cond': [
                     {
-                        'field': '项目名称',
+                        'field': PROJECT_FIELDS_EN['order_no'],
                         'method': 'like',
                         'value': [search]
                     },
                     {
-                        'field': '项目编号',
+                        'field': PROJECT_FIELDS_EN['project_code'],
                         'method': 'like',
                         'value': [search]
                     }
@@ -63,6 +63,7 @@ def list_project_summary():
         search = request.args.get('search', '', type=str)
         project_code = request.args.get('project_code', '', type=str)
         project_name = request.args.get('project_name', '', type=str)
+        order_no = request.args.get('order_no', '', type=str)
 
         filter_obj = None
         cond = []
@@ -81,12 +82,19 @@ def list_project_summary():
                 'value': [project_name]
             })
 
+        if order_no:
+            cond.append({
+                'field': PROJECT_FIELDS_EN['order_no'],
+                'method': 'like',
+                'value': [order_no]
+            })
+
         if search:
             filter_obj = {
                 'rel': 'or',
                 'cond': [
                     {
-                        'field': PROJECT_FIELDS_EN['project_name'],
+                        'field': PROJECT_FIELDS_EN['order_no'],
                         'method': 'like',
                         'value': [search]
                     },
@@ -106,12 +114,14 @@ def list_project_summary():
         fields = [
             'project_code',
             'project_name',
+            'order_no',
             'project_type',
             'project_cost_type',
             'project_status',
             'plan_start',
             'plan_finish',
-            'project_manager'
+            'project_manager',
+            'business_owner'
         ]
         projects = api_client.list_projects_en(
             skip=skip,

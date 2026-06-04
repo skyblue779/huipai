@@ -4,6 +4,7 @@ User directory API routes.
 import logging
 from flask import Blueprint, jsonify
 from api.online_office import api_client
+from config import PROJECT_MANAGER_ROLE_ID
 
 logger = logging.getLogger(__name__)
 
@@ -31,9 +32,26 @@ def _match_user_by_token(users, token):
             return user
         if _normalize_token(user.get('name')) == token:
             return user
+        if _normalize_token(user.get('username')) == token:
+            return user
+        if _normalize_token(user.get('user_name')) == token:
+            return user
+        if _normalize_token(user.get('userName')) == token:
+            return user
         if _normalize_token(user.get('uniqueid')) == token:
             return user
     return None
+
+
+def _normalize_account_user(user):
+    if not isinstance(user, dict):
+        return {}
+    normalized = dict(user)
+    if not normalized.get('name'):
+        normalized['name'] = normalized.get('username', '')
+    if not normalized.get('user_name'):
+        normalized['user_name'] = normalized.get('username', normalized.get('name', ''))
+    return normalized
 
 
 @user_bp.route('/list', methods=['GET'])
@@ -67,7 +85,18 @@ def get_user_info(user_id):
                 'data': user
             })
     except Exception as e:
-        logger.warning(f"get_user_info failed: {e} - fallback to list")
+        logger.warning(f"get_user_info failed: {e} - fallback to account_info/list")
+
+    try:
+        account_user = _normalize_account_user(api_client.get_account_info(user_id=user_id))
+        if account_user:
+            return jsonify({
+                'code': 200,
+                'msg': 'success',
+                'data': account_user
+            })
+    except Exception as e:
+        logger.warning(f"get_account_info fallback failed: {e}")
 
     try:
         users = api_client.list_users()
@@ -97,6 +126,45 @@ def get_user_info(user_id):
         }), 404
     except Exception as e:
         logger.error(f"get_user_info failed: {e}")
+        return jsonify({
+            'code': 500,
+            'msg': str(e)
+        }), 500
+
+
+@user_bp.route('/role-members/<role_id>', methods=['GET'])
+def list_role_members(role_id):
+    """List members for a specific role."""
+    try:
+        users = api_client.list_role_members(role_id)
+        return jsonify({
+            'code': 200,
+            'msg': 'success',
+            'data': users,
+            'total': len(users)
+        })
+    except Exception as e:
+        logger.error(f"list_role_members failed: {e}")
+        return jsonify({
+            'code': 500,
+            'msg': str(e)
+        }), 500
+
+
+@user_bp.route('/project-managers', methods=['GET'])
+def list_project_managers():
+    """List configured project manager role members."""
+    try:
+        users = api_client.list_role_members(PROJECT_MANAGER_ROLE_ID)
+        return jsonify({
+            'code': 200,
+            'msg': 'success',
+            'data': users,
+            'total': len(users),
+            'role_id': PROJECT_MANAGER_ROLE_ID
+        })
+    except Exception as e:
+        logger.error(f"list_project_managers failed: {e}")
         return jsonify({
             'code': 500,
             'msg': str(e)

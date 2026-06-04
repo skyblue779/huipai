@@ -209,10 +209,11 @@ import {
 } from '@element-plus/icons-vue'
 import { ElMessage, ElConfigProvider } from 'element-plus'
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import api from '../api/client'
 
 const router = useRouter()
+const route = useRoute()
 const loading = ref(false)
 const currentRole = ref('manager')
 const chartPeriod = ref('week')
@@ -245,6 +246,7 @@ const quickNavs = [
   { icon: FolderAdd, text: '阶段配置', color: '#1890ff', path: '/stage-config' },
   { icon: Odometer, text: '项目进度', color: '#52c41a', path: '/project-progress' },
   { icon: Money, text: '预算管理', color: '#722ed1', path: '/project-budget-management' },
+  { icon: Box, text: '我的负责节点', color: '#2f54eb', path: '/my-budget-responsibilities' },
   { icon: TrendCharts, text: '项目管控', color: '#fa8c16', path: '/project-control-dashboard' },
   { icon: DataLine, text: '预算看板', color: '#13c2c2', path: '/overall-budget-dashboard' },
   { icon: Tickets, text: '发货管理', color: '#f5222d', path: '/delivery-management' }
@@ -668,7 +670,11 @@ const filteredProjectTableData = computed(() => {
   })
 })
 
-const go = (path) => { if (path) router.push(path) }
+const go = (path) => {
+  if (!path) return
+  const query = route.query && Object.keys(route.query).length ? { ...route.query } : undefined
+  router.push(query ? { path, query } : path)
+}
 const handleRoleChange = (role) => { currentRole.value = role; ElMessage.success(`视角已切换至：${roleMap[role]}`) }
 const getTagType = (level) => (level === '一级' ? 'danger' : level === '二级' ? 'warning' : 'success')
 const applyProjectFilter = () => {

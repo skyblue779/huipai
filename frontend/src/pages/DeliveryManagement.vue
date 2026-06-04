@@ -795,10 +795,10 @@ const resetPrintTemplate = () => {
 const buildProjectOptions = (projects) => {
   const map = new Map();
   projects.forEach((project) => {
-    const code = project?.project_code ? String(project.project_code).trim() : '';
     const name = project?.project_name ? String(project.project_name).trim() : '';
-    if (!code && !name) return;
-    const label = code ? `${code} - ${name || '未命名项目'}` : (name || '未命名项目');
+    const orderNo = String(project?.order_no || project?.contract_name || '').trim();
+    if (!name && !orderNo) return;
+    const label = orderNo || '未填写订单号';
     const value = name || label;
     if (!map.has(value)) {
       map.set(value, { label, value });
