@@ -4,6 +4,7 @@ import ProjectCostConfig from '../pages/ProjectCostConfig.vue';
 import ProjectBudgetManagement from '../pages/ProjectBudgetManagement.vue';
 import MyBudgetResponsibilities from '../pages/MyBudgetResponsibilities.vue';
 import ProjectProgressManagement from '../pages/ProjectProgressManagement.vue';
+import ProjectProgressMobile from '../pages/ProjectProgressMobile.vue';
 import ProjectExecution from '../pages/ProjectExecution.vue';
 import OverallBudgetDashboard from '../pages/OverallBudgetDashboard.vue';
 import ProjectControlDashboard from '../pages/ProjectControlDashboard.vue';
@@ -57,6 +58,11 @@ const routes = [
     path: '/project-progress',
     name: 'ProjectProgress',
     component: ProjectProgressManagement
+  },
+  {
+    path: '/project-progress-mobile',
+    name: 'ProjectProgressMobile',
+    component: ProjectProgressMobile
   },
   {
     path: '/project-execution',
