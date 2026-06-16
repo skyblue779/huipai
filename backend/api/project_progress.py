@@ -917,6 +917,13 @@ def _build_delay_payload_from_record(record, delay_days):
     return payload
 
 
+def _reset_overdue_status_after_delay(payload, record):
+    if str(record.get('status') or '').strip() == STATUS_OVERDUE:
+        payload['status'] = STATUS_PENDING
+        payload['overdue_reason'] = ''
+    return payload
+
+
 def _prepare_delay_nodes_for_apply(nodes, delay_days):
     prepared_nodes = []
     skipped_count = 0
@@ -940,9 +947,12 @@ def _prepare_delay_nodes_for_apply(nodes, delay_days):
         payload = node.get('payload')
         if not isinstance(payload, dict) or not payload:
             payload = _build_delay_payload_from_record(current_record, delay_days)
+        else:
+            payload = dict(payload)
         if not payload:
             skipped_count += 1
             continue
+        _reset_overdue_status_after_delay(payload, current_record)
 
         prepared_nodes.append({
             'record_id': record_id,
@@ -1477,6 +1487,22 @@ def update_project_progress(data_id):
             if 'approver' in data
             else _normalize_single_member(current_record.get('approver'))
         )
+        target_status = str(data.get('status') or '').strip()
+        execution_submit_requested = (
+            not approval_action
+            and target_status in DONE_STATUSES
+            and (
+                submit_for_approval
+                or 'actual_finish' in data
+                or 'execution_note' in data
+                or 'site_upload' in data
+            )
+        )
+        if execution_submit_requested and current_status != STATUS_PENDING:
+            return jsonify({
+                'code': 400,
+                'msg': '只有未完成状态才能提交，超期节点请先提交延期申请并通过后再提交'
+            }), 400
 
         approval_requested = False
         if approval_action:
@@ -1503,7 +1529,6 @@ def update_project_progress(data_id):
                     'msg': '无效的审批操作'
                 }), 400
         elif submit_for_approval:
-            target_status = str(data.get('status') or '').strip()
             if approver_value and target_status in DONE_STATUSES:
                 data['status'] = (
                     STATUS_OVERDUE_PENDING_APPROVAL
