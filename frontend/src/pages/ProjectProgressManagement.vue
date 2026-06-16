@@ -228,13 +228,13 @@
               <span v-else class="stage-placeholder">--</span>
             </template>
           </el-table-column>
-          <el-table-column label="计划结束日期" width="140" align="center">
+          <el-table-column label="计划结束时间" width="190" align="center">
             <template #default="{ row }">
               <span v-if="!row.isGroup">{{ row.planEnd }}</span>
               <span v-else class="stage-placeholder">--</span>
             </template>
           </el-table-column>
-          <el-table-column label="完成时间" width="140" align="center">
+          <el-table-column label="完成时间" width="190" align="center">
             <template #default="{ row }">
               <span v-if="!row.isGroup">{{ row.actualFinish }}</span>
               <span v-else class="stage-placeholder">--</span>
@@ -346,7 +346,7 @@
           <el-descriptions-item label="批次编号">{{ detailRow.batchNo || '--' }}</el-descriptions-item>
           <el-descriptions-item label="批次名称">{{ detailRow.batchName || '--' }}</el-descriptions-item>
           <el-descriptions-item v-if="false" label="计划开始日期">{{ detailRow.planStart || '--' }}</el-descriptions-item>
-          <el-descriptions-item label="计划结束日期">{{ detailRow.planEnd || '--' }}</el-descriptions-item>
+          <el-descriptions-item label="计划结束时间">{{ detailRow.planEnd || '--' }}</el-descriptions-item>
           <el-descriptions-item label="完成时间">{{ detailRow.actualFinish || '--' }}</el-descriptions-item>
           <el-descriptions-item label="当前状态">{{ displayStatus(detailRow.status) }}</el-descriptions-item>
           <el-descriptions-item label="预警等级">{{ detailRow.warningLevel || '正常' }}</el-descriptions-item>
@@ -551,12 +551,13 @@
           style="width: 100%"
         />
       </el-form-item>
-      <el-form-item label="计划结束日期">
+      <el-form-item label="计划结束时间">
         <el-date-picker
           v-model="createNodeForm.planEnd"
-          type="date"
-          value-format="YYYY-MM-DD"
-          placeholder="请选择日期"
+          type="datetime"
+          format="YYYY-MM-DD HH:mm:ss"
+          value-format="YYYY-MM-DD HH:mm:ss"
+          placeholder="请选择时间"
           style="width: 100%"
         />
       </el-form-item>
@@ -645,12 +646,13 @@
           style="width: 100%"
         />
       </el-form-item>
-      <el-form-item label="计划结束日期">
+      <el-form-item label="计划结束时间">
         <el-date-picker
           v-model="editForm.planEnd"
-          type="date"
-          value-format="YYYY-MM-DD"
-          placeholder="请选择日期"
+          type="datetime"
+          format="YYYY-MM-DD HH:mm:ss"
+          value-format="YYYY-MM-DD HH:mm:ss"
+          placeholder="请选择时间"
           style="width: 100%"
         />
       </el-form-item>
@@ -1015,18 +1017,50 @@ const formatDate = (value) => {
   return `${year}-${month}-${day}`;
 };
 
-const addDaysToDate = (value, days) => {
+const formatDateTime = (value) => {
+  if (!value) return '--';
+  const date = value instanceof Date ? value : parseDateValue(value);
+  if (!date || Number.isNaN(date.getTime())) return String(value);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hour = String(date.getHours()).padStart(2, '0');
+  const minute = String(date.getMinutes()).padStart(2, '0');
+  const second = String(date.getSeconds()).padStart(2, '0');
+  return `${year}-${month}-${day} ${hour}:${minute}:${second}`;
+};
+
+const hasExplicitTime = (value) => typeof value === 'string' && /\d{1,2}:\d{2}/.test(value);
+
+const hasNonZeroTime = (date) =>
+  date instanceof Date &&
+  !Number.isNaN(date.getTime()) &&
+  (date.getHours() !== 0 || date.getMinutes() !== 0 || date.getSeconds() !== 0);
+
+const formatShiftedDate = (date, sourceValue, forceTime) => {
+  if (forceTime || hasExplicitTime(sourceValue) || hasNonZeroTime(date)) {
+    return formatDateTime(date);
+  }
+  return formatDate(date);
+};
+
+const addDaysToDate = (value, days, forceTime = false) => {
   const parsed = parseDateValue(value);
   if (!parsed) return '';
   const next = new Date(parsed.getTime());
   next.setDate(next.getDate() + days);
-  return formatDate(next);
+  return formatShiftedDate(next, value, forceTime);
 };
 
 // 表格日期展示格式
 const formatDateCell = (value) => {
   if (!value) return '';
   return formatDate(value);
+};
+
+const formatDateTimeCell = (value) => {
+  if (!value) return '';
+  return formatDateTime(value);
 };
 
 // 去除姓名末尾括号中的账号信息，例如 "张三 (zhangsan)" -> "张三"
@@ -1319,6 +1353,7 @@ const updatePlanTimeValue = (rawValue, newStart, fallbackEnd) => {
   const formatEnd = (value) => {
     if (!value) return null;
     if (typeof value === 'string') return value.replace(/\//g, '-');
+    if (value instanceof Date) return formatDateTime(value);
     return formatDate(value);
   };
   if (Array.isArray(rawValue)) {
@@ -2028,9 +2063,9 @@ const normalizeNode = (record, index) => {
     planStartRaw: planStartDate,
     planEndRaw: planEndDate,
     planStart: formatDateCell(planStartDate),
-    planEnd: formatDateCell(planEndDate),
+    planEnd: formatDateTimeCell(planEndDate),
     actualFinishRaw: actualFinishDate,
-    actualFinish: formatDateCell(actualFinishDate),
+    actualFinish: formatDateTimeCell(actualFinishDate),
     planStartSort: planStartDate ? planStartDate.getTime() : null,
     originalIndex: index,
     isMilestone: isDone(record.status || '未完成')
@@ -3338,12 +3373,12 @@ const openDelayDialog = (row) => {
 const buildDelayPayload = (node, days) => {
   const payload = {};
   const shiftedPlanTime = shiftPlanTimeValue(node.rawPlanTime, days);
-  const shiftedPlanEnd = addDaysToDate(node.planEndRaw, days);
+  const shiftedPlanEnd = addDaysToDate(node.planEndRaw, days, true);
 
   if (JSON.stringify(shiftedPlanTime) !== JSON.stringify(node.rawPlanTime)) {
     payload.plan_time = shiftedPlanTime;
   }
-  if (node.planEndRaw && shiftedPlanEnd && shiftedPlanEnd !== formatDate(node.planEndRaw)) {
+  if (node.planEndRaw && shiftedPlanEnd && shiftedPlanEnd !== formatDateTime(node.planEndRaw)) {
     payload.plan_finishtime = shiftedPlanEnd;
   }
   return payload;
@@ -3383,7 +3418,7 @@ const handleApplyDelay = async () => {
         before_plan_start: node.planStart || '',
         after_plan_start: addDaysToDate(node.planStartRaw, delayDays),
         before_plan_end: node.planEnd || '',
-        after_plan_end: addDaysToDate(node.planEndRaw, delayDays),
+        after_plan_end: addDaysToDate(node.planEndRaw, delayDays, true),
         executor_ids: getExecutorIds(node.executorRaw),
         executor_raw: node.executorRaw,
         payload
@@ -3573,7 +3608,7 @@ const openEditDialog = async (row) => {
   const initialExecutorIds = getExecutorIds(row.executorRaw);
   const initialApproverId = getMemberId(row.approverRaw);
   const initialPlanStart = row.planStartRaw ? formatDate(row.planStartRaw) : row.planStart || '';
-  const initialPlanEnd = row.planEndRaw ? formatDate(row.planEndRaw) : row.planEnd || '';
+  const initialPlanEnd = row.planEndRaw ? formatDateTime(row.planEndRaw) : row.planEnd || '';
   editForm.value = {
     nodeName: row.nodeLabel || row.name || '',
     orderNo: resolveNodePosition(row),
@@ -4359,4 +4394,3 @@ onMounted(async () => {
   }
 }
 </style>
-

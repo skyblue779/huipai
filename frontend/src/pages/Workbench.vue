@@ -370,6 +370,18 @@ const formatDateCell = (value) => {
   return `${year}-${month}-${day}`
 }
 
+const formatDateTimeCell = (value) => {
+  const date = parseDateValue(value)
+  if (!date) return normalizeLabel(value)
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  const hour = String(date.getHours()).padStart(2, '0')
+  const minute = String(date.getMinutes()).padStart(2, '0')
+  const second = String(date.getSeconds()).padStart(2, '0')
+  return `${year}-${month}-${day} ${hour}:${minute}:${second}`
+}
+
 const formatExecutor = (value) => {
   if (!value) return ''
   if (Array.isArray(value)) {
@@ -406,7 +418,7 @@ const getProgressStartRaw = (record) => {
   if (range.start) return range.start
   return parseDateValue(pickValue(record, PROGRESS_FIELD_KEYS.planStart, ''))
 }
-const getProgressActualFinish = (record) => normalizeLabel(pickValue(record, PROGRESS_FIELD_KEYS.actualFinish))
+const getProgressActualFinish = (record) => formatDateTimeCell(pickValue(record, PROGRESS_FIELD_KEYS.actualFinish))
 const getProgressStatus = (record) => normalizeStatus(pickValue(record, PROGRESS_FIELD_KEYS.status))
 
 const getDeliveryProjectName = (record) => normalizeLabel(pickValue(record, DELIVERY_FIELD_KEYS.projectName))

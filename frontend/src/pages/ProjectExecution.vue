@@ -94,12 +94,12 @@
               </div>
             </template>
           </el-table-column>
-          <el-table-column label="计划完成" width="140" align="center">
+          <el-table-column label="计划完成时间" width="190" align="center">
             <template #default="{ row }">
               <span>{{ row.planEnd || '--' }}</span>
             </template>
           </el-table-column>
-          <el-table-column label="实际完成" width="140" align="center">
+          <el-table-column label="实际完成时间" width="190" align="center">
             <template #default="{ row }">
               <span>{{ row.actualFinish || '--' }}</span>
             </template>
@@ -120,7 +120,7 @@
             <template #default="{ row }">
               <el-button type="primary" link @click="openDetailDialog(row)">详情</el-button>
               <el-button v-if="canSubmitRow(row)" type="success" link @click="openSubmitDialog(row)">提交</el-button>
-              <el-button v-if="canSubmitRow(row)" type="warning" link @click="openDelayRequestDialog(row)">延期申请</el-button>
+              <el-button v-if="canCreateDelayRequestRow(row)" type="warning" link @click="openDelayRequestDialog(row)">延期申请</el-button>
               <el-button v-if="canApproveRow(row)" type="primary" link @click="handleApproval(row, 'approve')">通过</el-button>
               <el-button v-if="canApproveRow(row)" type="danger" link @click="handleApproval(row, 'reject')">驳回</el-button>
             </template>
@@ -210,11 +210,11 @@
                 </div>
                 <div class="mobile-card-body">
                   <div class="mobile-info">
-                    <span class="label">计划完成</span>
+                    <span class="label">计划完成时间</span>
                     <span class="value">{{ row.planEnd || '--' }}</span>
                   </div>
                   <div class="mobile-info">
-                    <span class="label">实际完成</span>
+                    <span class="label">实际完成时间</span>
                     <span class="value">{{ row.actualFinish || '--' }}</span>
                   </div>
                   <div v-if="row.executorName" class="mobile-info">
@@ -229,7 +229,7 @@
                 <div class="mobile-card-actions">
                   <el-button size="small" @click="openDetailDialog(row)">详情</el-button>
                   <el-button v-if="canSubmitRow(row)" size="small" type="primary" @click="openSubmitDialog(row)">提交</el-button>
-                  <el-button v-if="canSubmitRow(row)" size="small" type="warning" @click="openDelayRequestDialog(row)">延期申请</el-button>
+                  <el-button v-if="canCreateDelayRequestRow(row)" size="small" type="warning" @click="openDelayRequestDialog(row)">延期申请</el-button>
                   <el-button v-if="canApproveRow(row)" size="small" type="primary" @click="handleApproval(row, 'approve')">通过</el-button>
                   <el-button v-if="canApproveRow(row)" size="small" type="danger" @click="handleApproval(row, 'reject')">驳回</el-button>
                 </div>
@@ -314,8 +314,8 @@
           <el-descriptions-item label="批次编号">{{ detailRow.batchNo || '--' }}</el-descriptions-item>
           <el-descriptions-item label="批次名称">{{ detailRow.batchName || '--' }}</el-descriptions-item>
           <el-descriptions-item v-if="false" label="计划开始">{{ detailRow.planStart || '--' }}</el-descriptions-item>
-          <el-descriptions-item label="计划完成">{{ detailRow.planEnd || '--' }}</el-descriptions-item>
-          <el-descriptions-item label="实际完成">{{ detailRow.actualFinish || '--' }}</el-descriptions-item>
+          <el-descriptions-item label="计划完成时间">{{ detailRow.planEnd || '--' }}</el-descriptions-item>
+          <el-descriptions-item label="实际完成时间">{{ detailRow.actualFinish || '--' }}</el-descriptions-item>
           <el-descriptions-item label="当前状态">{{ detailRow.status || '未完成' }}</el-descriptions-item>
           <el-descriptions-item label="负责人">{{ detailRow.executorName || '--' }}</el-descriptions-item>
           <el-descriptions-item label="审批人">{{ detailRow.approverName || '--' }}</el-descriptions-item>
@@ -381,23 +381,15 @@
       :fullscreen="isMobile"
       :class="{ 'mobile-dialog': isMobile }"
     >
-        <el-alert
-          v-if="submitNeedsOverdueReport"
-          class="submit-overdue-alert"
-          type="warning"
-          show-icon
-          :closable="false"
-          title="当前节点已超期，请先提交超期原因并更新为“超期”，后续再补充执行完成。"
-        />
         <el-form :label-width="isMobile ? '90px' : '110px'">
-          <el-form-item v-if="!submitNeedsOverdueReport" label="实际完成日期">
+          <el-form-item label="实际完成时间">
             <el-input
               v-model="submitForm.actualFinish"
               readonly
-              placeholder="系统自动填入当前日期"
+              placeholder="系统自动填入当前时间"
             />
         </el-form-item>
-        <el-form-item v-if="!submitNeedsOverdueReport" label="现场资料上传" required>
+        <el-form-item label="现场资料上传" required>
           <el-upload
             :file-list="uploadFileList"
             action="#"
@@ -417,7 +409,7 @@
             </template>
           </el-upload>
         </el-form-item>
-        <el-form-item v-if="!submitNeedsOverdueReport" label="执行情况说明">
+        <el-form-item label="执行情况说明">
           <el-input
             v-model="submitForm.executionNote"
             type="textarea"
@@ -425,18 +417,10 @@
             placeholder="请输入执行情况说明"
           />
         </el-form-item>
-        <el-form-item v-if="submitNeedOverdueReason" label="超期原因">
-          <el-input
-            v-model="submitForm.overdueReason"
-            type="textarea"
-            :rows="3"
-            placeholder="项目已超期，请填写超期原因"
-          />
-        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="submitDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="handleSubmit">{{ submitConfirmText }}</el-button>
+        <el-button type="primary" :loading="submitting" @click="handleSubmit">确认提交</el-button>
       </template>
     </el-dialog>
 
@@ -520,6 +504,7 @@ const userProfile = ref({
   name: '',
   account: ''
 });
+const projectManagerMembers = ref([]);
 const route = useRoute();
 
 const detailDialogVisible = ref(false);
@@ -538,8 +523,7 @@ const isMobile = ref(false);
 
 const submitForm = ref({
   actualFinish: '',
-  executionNote: '',
-  overdueReason: ''
+  executionNote: ''
 });
 
 const delayRequestForm = ref({
@@ -610,13 +594,31 @@ const formatDate = (value) => {
   return `${year}-${month}-${day}`;
 };
 
+const formatDateTime = (value) => {
+  if (!value) return '--';
+  const date = value instanceof Date ? value : parseDateValue(value);
+  if (!date || Number.isNaN(date.getTime())) return String(value);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hour = String(date.getHours()).padStart(2, '0');
+  const minute = String(date.getMinutes()).padStart(2, '0');
+  const second = String(date.getSeconds()).padStart(2, '0');
+  return `${year}-${month}-${day} ${hour}:${minute}:${second}`;
+};
+
 // 表格日期展示格式
 const formatDateCell = (value) => {
   if (!value) return '';
   return formatDate(value);
 };
 
-const getCurrentDateValue = () => formatDate(new Date());
+const formatDateTimeCell = (value) => {
+  if (!value) return '';
+  return formatDateTime(value);
+};
+
+const getCurrentDateValue = () => formatDateTime(new Date());
 
 // 格式化执行人显示
 const formatUser = (value) => {
@@ -778,6 +780,10 @@ const userTokenSet = computed(() =>
 // 当前用户名 token 集合
 const userNameTokenSet = computed(() => buildTokenSet(splitNameText(userProfile.value.name || userParam.value)));
 
+const isProjectManager = computed(() =>
+  projectManagerMembers.value.some((member) => userValueMatchesCurrentUser(member))
+);
+
 // 标准化文本展示
 const normalizeLabel = (value) => {
   if (value === null || value === undefined) return '';
@@ -876,9 +882,9 @@ const normalizeRecord = (record, index) => {
     planStartRaw: planStartDate,
     planEndRaw: planEndDate,
     planStart: formatDateCell(planStartDate),
-    planEnd: formatDateCell(planEndDate),
+    planEnd: formatDateTimeCell(planEndDate),
     actualFinishRaw: actualFinishDate,
-    actualFinish: formatDateCell(actualFinishDate),
+    actualFinish: formatDateTimeCell(actualFinishDate),
     executorName: formatUser(record.executor),
     executorRaw: record.executor,
     approverName: formatUser(record.approver),
@@ -940,6 +946,8 @@ const compareOrderValue = (a, b) => {
 
 const completedStatusSet = new Set(['完成', '超期完成', '已完成']);
 const approvalStatusSet = new Set(['待审批', '超期待审批']);
+const SUBMITTABLE_STATUS = '未完成';
+const DELAY_REQUEST_STATUS_SET = new Set(['未完成', '超期']);
 const currentPage = ref(1);
 const pageSize = ref(10);
 // 归一化搜索关键字
@@ -973,9 +981,17 @@ const approvalRecords = computed(() => {
   );
 });
 
-const completedRecords = computed(() =>
-  applySearch(normalizedRecords.value.filter((row) => isDone(row.status)))
-);
+const completedRecords = computed(() => {
+  if (!hasUserId.value) return [];
+  if (isProjectManager.value) {
+    return applySearch(normalizedRecords.value.filter((row) => isDone(row.status)));
+  }
+  return applySearch(
+    normalizedRecords.value.filter(
+      (row) => matchesMemberValue(row.executorRaw) && isDone(row.status)
+    )
+  );
+});
 
 const projectSummaryMap = computed(() => {
   const map = new Map();
@@ -1241,6 +1257,16 @@ const loadProgressRecords = async () => {
   }
 };
 
+const loadProjectManagers = async () => {
+  try {
+    const result = await api.listProjectManagers();
+    projectManagerMembers.value = result?.code === 200 && Array.isArray(result.data) ? result.data : [];
+  } catch (error) {
+    console.error('加载项目管理员成员失败：', error);
+    projectManagerMembers.value = [];
+  }
+};
+
 const loadDelayReviewRequests = async () => {
   if (!hasUserId.value) {
     delayReviewRequests.value = [];
@@ -1296,42 +1322,11 @@ const openSubmitDialog = (row) => {
   submitRow.value = row;
   submitForm.value = {
     actualFinish: getCurrentDateValue(),
-    executionNote: row.executionNote || '',
-    overdueReason: row.overdueReason || ''
+    executionNote: row.executionNote || ''
   };
   uploadFileList.value = [];
   submitDialogVisible.value = true;
 };
-
-const hasOverdueReason = (row) => Boolean((row?.overdueReason || '').toString().trim());
-
-// 仅当状态已是“超期”且未填原因时，要求先补充超期原因
-const submitNeedsOverdueReport = computed(() => {
-  if (!submitRow.value) return false;
-  if (isDone(submitRow.value.status)) return false;
-  return submitRow.value.status === '超期' && !hasOverdueReason(submitRow.value);
-});
-
-// 当前提交是否需要填写超期原因
-const submitNeedOverdueReason = computed(() => {
-  if (!submitRow.value) return false;
-  if (submitNeedsOverdueReport.value) return true;
-  if (submitRow.value.status === '超期') return true;
-  return false;
-});
-
-// 按提交时间判定是否超期完成（决定最终状态）
-const submitWillBeOverdue = computed(() => {
-  if (!submitRow.value) return false;
-  if (submitNeedsOverdueReport.value || submitRow.value.status === '超期') return true;
-  const planEnd = submitRow.value.planEndRaw;
-  if (!(planEnd instanceof Date) || Number.isNaN(planEnd.getTime())) return false;
-  const actualDate = parseDateValue(submitForm.value.actualFinish);
-  if (!actualDate) return false;
-  return actualDate.getTime() > planEnd.getTime();
-});
-
-const submitConfirmText = computed(() => (submitNeedsOverdueReport.value ? '提交超期原因' : '确认提交'));
 
 const IMAGE_EXT_RE = /\.(png|jpe?g|gif|bmp|webp|svg|heic|heif)(?:$|[?#])/i;
 
@@ -1535,11 +1530,14 @@ const mergeSiteUploads = (existing, uploaded) => {
   return [...existingList, ...uploadedList];
 };
 
-const canSubmitRow = (row) => activeTab.value === 'todo' && Boolean(row?.recordId);
+const canSubmitRow = (row) =>
+  activeTab.value === 'todo' && Boolean(row?.recordId) && row.status === SUBMITTABLE_STATUS;
+const canCreateDelayRequestRow = (row) =>
+  activeTab.value === 'todo' && Boolean(row?.recordId) && DELAY_REQUEST_STATUS_SET.has(row.status);
 const canApproveRow = (row) => activeTab.value === 'approval' && Boolean(row?.recordId);
 
 const openDelayRequestDialog = (row) => {
-  if (!canSubmitRow(row)) return;
+  if (!canCreateDelayRequestRow(row)) return;
   delayRequestRow.value = row;
   delayRequestForm.value = {
     days: 1,
@@ -1653,57 +1651,37 @@ const handleSubmit = async () => {
     ElMessage.error('无法提交：缺少记录ID');
     return;
   }
-  if (submitNeedOverdueReason.value && !submitForm.value.overdueReason.trim()) {
-    ElMessage.warning('请填写超期原因');
+  if (submitRow.value.status !== SUBMITTABLE_STATUS) {
+    ElMessage.warning('只有未完成状态才能提交，超期节点请先提交延期申请并通过后再提交');
     return;
   }
-  if (!submitNeedsOverdueReport.value && !submitForm.value.actualFinish) {
-    ElMessage.warning('实际完成日期不能为空');
+  if (!submitForm.value.actualFinish) {
+    ElMessage.warning('实际完成时间不能为空');
     return;
   }
-  if (!submitNeedsOverdueReport.value && !uploadFileList.value.length) {
+  if (!uploadFileList.value.length) {
     ElMessage.warning('请上传现场资料');
     return;
   }
 
   submitting.value = true;
   try {
-    if (submitNeedsOverdueReport.value) {
-      const overdueReason = submitForm.value.overdueReason.trim();
-      const reportPayload = {
-        status: '超期',
-        overdue_reason: overdueReason
-      };
-      const reportResult = await api.updateProjectProgress(submitRow.value.recordId, reportPayload);
-      if (reportResult?.code === 200) {
-        ElMessage.success('超期原因已提交，状态已更新为超期');
-        submitDialogVisible.value = false;
-        await loadProgressRecords();
-      } else {
-        ElMessage.error(reportResult?.msg || '提交超期原因失败');
-      }
-      return;
-    }
+    const actualFinish = getCurrentDateValue();
+    submitForm.value.actualFinish = actualFinish;
 
     const payload = {
-      actual_finish: submitForm.value.actualFinish,
+      actual_finish: actualFinish,
       execution_note: submitForm.value.executionNote
     };
-
-    if (submitNeedOverdueReason.value) {
-      payload.overdue_reason = submitForm.value.overdueReason.trim();
-    }
 
     if (uploadFileList.value.length) {
       const uploadedFiles = await uploadFiles();
       payload.site_upload = mergeSiteUploads(submitRow.value.siteUploadRaw, uploadedFiles);
     }
 
-    if (!isDone(submitRow.value.status)) {
-      payload.status = submitWillBeOverdue.value ? '超期完成' : '完成';
-      if (getMemberId(submitRow.value.approverRaw)) {
-        payload.submit_for_approval = true;
-      }
+    payload.status = '完成';
+    if (getMemberId(submitRow.value.approverRaw)) {
+      payload.submit_for_approval = true;
     }
 
     if (Object.keys(payload).length === 0) {
@@ -1968,6 +1946,7 @@ watch(
 onMounted(async () => {
   handleResize();
   window.addEventListener('resize', handleResize);
+  await loadProjectManagers();
   await syncCurrentUser();
   await Promise.all([loadProgressRecords(), loadDelayReviewRequests()]);
   console.log('Webpage User ID:', userParam.value);
@@ -2384,4 +2363,3 @@ onBeforeUnmount(() => {
   }
 }
 </style>
-
