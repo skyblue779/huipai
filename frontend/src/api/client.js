@@ -1,4 +1,4 @@
-﻿// const DEFAULT_BASE_URL = 'http://172.16.0.66:9989';
+﻿// const DEFAULT_BASE_URL = 'http://172.16.0.158:9989';
 // const DEFAULT_BASE_URL = 'http://localhost:9989';
 //本地测试
 

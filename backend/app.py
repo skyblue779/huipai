@@ -118,8 +118,8 @@ def create_app():
 
 if __name__ == '__main__':
     app = create_app()
-    # app.run(host='172.16.0.66', port=9989, debug=DEBUG)
+    app.run(host='172.16.0.158', port=9989, debug=DEBUG)
     # app.run(host='localhost', port=9989, debug=DEBUG)
     # 测试环境
-    app.run(host='127.0.0.1', port=9966)
+    # app.run(host='127.0.0.1', port=9966)
     # 生产环境
