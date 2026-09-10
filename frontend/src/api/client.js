@@ -161,7 +161,6 @@ const listProjectSummary = ({
 
 const createProjectProgress = (data) => request('POST', '/api/progress/create', data);
 const updateProjectProgress = (dataId, data) => request('PUT', `/api/progress/update/${dataId}`, data);
-const delayProjectProgress = (data) => request('POST', '/api/progress/delay', data);
 const createProjectDelayRequest = (data) => request('POST', '/api/progress/delay-request/create', data);
 const listProjectDelayRequests = ({ projectCode = '', projectName = '', status = 'pending' } = {}) => {
   const params = new URLSearchParams();
@@ -306,6 +305,7 @@ const listUsers = () => request('GET', '/api/user/list');
 const getUserInfo = (userId) => request('GET', `/api/user/info/${userId}`);
 const listRoleMembers = (roleId) => request('GET', `/api/user/role-members/${roleId}`);
 const listProjectManagers = () => request('GET', '/api/user/project-managers');
+const listDelayRequestReviewAdmins = () => request('GET', '/api/user/delay-request-review-admins');
 
 export default {
   listProjectTypes,
@@ -322,7 +322,6 @@ export default {
   listProjectSummary,
   createProjectProgress,
   updateProjectProgress,
-  delayProjectProgress,
   createProjectDelayRequest,
   listProjectDelayRequests,
   approveProjectDelayRequest,
@@ -346,5 +345,6 @@ export default {
   listUsers,
   getUserInfo,
   listRoleMembers,
-  listProjectManagers
+  listProjectManagers,
+  listDelayRequestReviewAdmins
 };

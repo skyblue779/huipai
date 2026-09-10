@@ -102,6 +102,52 @@ PROJECT_PROGRESS_FIELDS_EN = {
 
 PROJECT_PROGRESS_REVERSE_EN = {v: k for k, v in PROJECT_PROGRESS_FIELDS_EN.items()}
 
+# 延期申请单（entry: a14a4937b22bd8a6379ddddd）
+# 申请数据存于主表；每个受影响的进度节点存于 nodes 子表单。
+DELAY_REQUEST_FIELDS_EN = {
+    'request_id': '_widget_1784256930947',
+    'status': '_widget_1784256930948',
+    'project_code': '_widget_1784256930949',
+    'project_name': '_widget_1784256930950',
+    'batch_no': '_widget_1784256930951',
+    'batch_name': '_widget_1784256930952',
+    'anchor_record_id': '_widget_1784256930953',
+    'anchor_node_label': '_widget_1784256930954',
+    'delay_days': '_widget_1784256930955',
+    'reason': '_widget_1784256930956',
+    'applicant': '_widget_1784256930957',
+    'applicant_id': '_widget_1784256930958',
+    'business_owner': '_widget_1784256930959',
+    'reviewer': '_widget_1784256930960',
+    'review_result': '_widget_1784256930961',
+    'review_note': '_widget_1784256930962',
+    'reviewed_at': '_widget_1784256930963',
+    'node_count': '_widget_1784256930964',
+    'updated_node_count': '_widget_1784256930965',
+    'skipped_completed_count': '_widget_1784256930966',
+    'failed_node_count': '_widget_1784257129909',
+    'nodes': '_widget_1784257287519',
+}
+
+DELAY_REQUEST_DETAIL_FIELDS_EN = {
+    'record_id': '_widget_1784257287627',
+    'main_stage_label': '_widget_1784257287683',
+    'node_label': '_widget_1784257287741',
+    'status_at_request': '_widget_1784257287801',
+    'status_at_review': '_widget_1784257287852',
+    # 当前远程表配置为 text；统一写入字符串 "true" / "false"。
+    'selected_for_update': '_widget_1784257287906',
+    'apply_status': '_widget_1784257288262',
+    'apply_error': '_widget_1784257288333',
+    'before_plan_start': '_widget_1784257288043',
+    'before_plan_end': '_widget_1784257288187',
+    'requested_plan_end': '_widget_1784257287974',
+    'approved_plan_end': '_widget_1784257288114',
+}
+
+DELAY_REQUEST_REVERSE_EN = {v: k for k, v in DELAY_REQUEST_FIELDS_EN.items()}
+DELAY_REQUEST_DETAIL_REVERSE_EN = {v: k for k, v in DELAY_REQUEST_DETAIL_FIELDS_EN.items()}
+
 PROJECT_REVERSE = {v: k for k, v in PROJECT_FIELDS.items()}
 
 # 项目表英文字段映射（前端使用）

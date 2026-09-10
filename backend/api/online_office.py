@@ -14,6 +14,7 @@ from config import (
     PROJECT_TYPE_ENTRY_ID,
     COST_TYPE_ENTRY_ID,
     PROJECT_PROGRESS_ENTRY_ID,
+    DELAY_REQUEST_ENTRY_ID,
     PROJECT_BUDGET_ENTRY_ID,
     DELIVERY_ENTRY_ID,
     INSPECTION_ENTRY_ID,
@@ -33,6 +34,10 @@ from field_mapping import (
     PROJECT_REVERSE_EN,
     PROJECT_PROGRESS_FIELDS_EN,
     PROJECT_PROGRESS_REVERSE_EN,
+    DELAY_REQUEST_FIELDS_EN,
+    DELAY_REQUEST_DETAIL_FIELDS_EN,
+    DELAY_REQUEST_REVERSE_EN,
+    DELAY_REQUEST_DETAIL_REVERSE_EN,
     PROJECT_BUDGET_FIELDS_EN,
     PROJECT_BUDGET_DETAIL_FIELDS_EN,
     PROJECT_BUDGET_REVERSE_EN,
@@ -362,6 +367,127 @@ class OnlineOfficeAPI:
         url = self._build_url(PROJECT_PROGRESS_ENTRY_ID, 'upload_file')
         result = self._request('POST', url, json=files)
         return result.get('data', [])
+
+    # ==================== Delay request operations ====================
+
+    @staticmethod
+    def _map_delay_request_nodes_to_alias(nodes: Any) -> List[Dict[str, Any]]:
+        if not isinstance(nodes, list):
+            return []
+        return [
+            FieldMapper.map_to_alias(node, DELAY_REQUEST_DETAIL_FIELDS_EN)
+            for node in nodes
+            if isinstance(node, dict)
+        ]
+
+    @staticmethod
+    def _map_delay_request_nodes_from_alias(nodes: Any) -> Any:
+        if not isinstance(nodes, list):
+            return nodes
+        return [
+            FieldMapper.map_from_alias(node, DELAY_REQUEST_DETAIL_REVERSE_EN)
+            for node in nodes
+            if isinstance(node, dict)
+        ]
+
+    @classmethod
+    def _map_delay_request_to_alias(cls, data: Dict[str, Any]) -> Dict[str, Any]:
+        supported = {
+            key: value
+            for key, value in (data or {}).items()
+            if key in DELAY_REQUEST_FIELDS_EN and key != 'nodes'
+        }
+        mapped = FieldMapper.map_to_alias(supported, DELAY_REQUEST_FIELDS_EN)
+        if 'nodes' in (data or {}):
+            mapped[DELAY_REQUEST_FIELDS_EN['nodes']] = cls._map_delay_request_nodes_to_alias(
+                data.get('nodes')
+            )
+        return mapped
+
+    @classmethod
+    def _map_delay_request_from_alias(cls, data: Dict[str, Any]) -> Dict[str, Any]:
+        mapped = FieldMapper.map_from_alias(data or {}, DELAY_REQUEST_REVERSE_EN)
+        if DELAY_REQUEST_FIELDS_EN['nodes'] in (data or {}):
+            mapped['nodes'] = cls._map_delay_request_nodes_from_alias(
+                data.get(DELAY_REQUEST_FIELDS_EN['nodes'])
+            )
+        mapped['created_at'] = mapped.get('created_at') or mapped.get('createTime') or ''
+        mapped['updated_at'] = mapped.get('updated_at') or mapped.get('updateTime') or ''
+        return mapped
+
+    def create_delay_request(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Create a delay request and prevent duplicate retries by request_id."""
+        mapped_data = self._map_delay_request_to_alias(data)
+        url = self._build_url(DELAY_REQUEST_ENTRY_ID, 'unique_create')
+        result = self._request('POST', url, json={
+            'data': mapped_data,
+            'unique': [DELAY_REQUEST_FIELDS_EN['request_id']],
+            'is_start_event': False
+        })
+        response_data = result.get('data', {})
+        if isinstance(response_data, dict) and 'status' in response_data:
+            if str(response_data.get('status')) != '1':
+                raise ValueError(response_data.get('error_message') or '延期申请创建失败或申请编号重复')
+            data_ids = response_data.get('data_id') or []
+            if not isinstance(data_ids, list):
+                data_ids = [data_ids]
+            if data_ids:
+                return self.get_delay_request(str(data_ids[0]))
+        return self._map_delay_request_from_alias(response_data)
+
+    def get_delay_request(self, data_id: str) -> Dict[str, Any]:
+        url = self._build_url(DELAY_REQUEST_ENTRY_ID, 'data_retrieve')
+        result = self._request('POST', url, json={'data_id': data_id})
+        return self._map_delay_request_from_alias(result.get('data', {}))
+
+    def list_delay_requests(
+        self,
+        skip: int = 0,
+        limit: int = 300,
+        filter_obj: Optional[Dict] = None
+    ) -> List[Dict[str, Any]]:
+        url = self._build_url(DELAY_REQUEST_ENTRY_ID, 'data')
+        payload = {'skip': skip, 'limit': limit}
+        if filter_obj:
+            payload['filter'] = filter_obj
+        result = self._request('POST', url, json=payload)
+        return [
+            self._map_delay_request_from_alias(item)
+            for item in result.get('data', [])
+        ]
+
+    def update_delay_request(self, data_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
+        url = self._build_url(DELAY_REQUEST_ENTRY_ID, 'data_update')
+        result = self._request('POST', url, json={
+            'data_id': data_id,
+            'data': self._map_delay_request_to_alias(data),
+            'is_start_event': False
+        })
+        return self._map_delay_request_from_alias(result.get('data', {}))
+
+    def claim_delay_request(self, request_id: str) -> bool:
+        """Atomically claim a pending request before applying node updates."""
+        url = self._build_url(DELAY_REQUEST_ENTRY_ID, 'data_batch_update')
+        result = self._request('POST', url, json={
+            'filter': {
+                'rel': 'and',
+                'cond': [
+                    {
+                        'field': DELAY_REQUEST_FIELDS_EN['request_id'],
+                        'method': 'eq',
+                        'value': [str(request_id)]
+                    },
+                    {
+                        'field': DELAY_REQUEST_FIELDS_EN['status'],
+                        'method': 'eq',
+                        'value': ['pending']
+                    }
+                ]
+            },
+            'field': DELAY_REQUEST_FIELDS_EN['status'],
+            'value': 'processing'
+        })
+        return int(result.get('success') or 0) == 1
 
     # ==================== Project budget operations ====================
 

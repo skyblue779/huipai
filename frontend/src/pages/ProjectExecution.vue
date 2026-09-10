@@ -137,6 +137,32 @@
           row-key="request_id"
           :empty-text="emptyText"
         >
+          <el-table-column type="expand" width="52">
+            <template #default="{ row }">
+              <div class="delay-request-node-details">
+                <div class="delay-request-node-details__title">
+                  本次申请涉及 {{ getDelayRequestNodes(row).length }} 个节点，统一延期 {{ row.delay_days || 0 }} 天
+                </div>
+                <el-table :data="getDelayRequestNodes(row)" size="small" border>
+                  <el-table-column label="节点" min-width="200">
+                    <template #default="{ row: node }">
+                      {{ getDelayRequestNodeLabel(node) }}
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="延期前计划时间" min-width="220">
+                    <template #default="{ row: node }">
+                      {{ getDelayRequestNodePlan(node) }}
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="责任人" min-width="140">
+                    <template #default="{ row: node }">
+                      {{ formatUser(node.executor_raw || node.executor_ids) || '--' }}
+                    </template>
+                  </el-table-column>
+                </el-table>
+              </div>
+            </template>
+          </el-table-column>
           <el-table-column label="项目 / 批次" min-width="280">
             <template #default="{ row }">
               <div class="project-cell">
@@ -163,24 +189,43 @@
           <el-table-column label="申请时间" width="170" align="center">
             <template #default="{ row }">{{ row.created_at || '--' }}</template>
           </el-table-column>
+          <el-table-column label="审核状态" width="100" align="center">
+            <template #default="{ row }">
+              <el-tag :type="getDelayRequestStatusTag(row.status)" effect="dark">
+                {{ getDelayRequestStatusText(row.status) }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="审核人" width="130" align="center">
+            <template #default="{ row }">{{ formatUser(row.reviewer) || '--' }}</template>
+          </el-table-column>
+          <el-table-column label="审核时间" width="170" align="center">
+            <template #default="{ row }">{{ isDelayRequestPending(row.status) ? '--' : row.reviewed_at || row.updated_at || '--' }}</template>
+          </el-table-column>
+          <el-table-column label="审核说明" min-width="180">
+            <template #default="{ row }">{{ getDelayRequestReviewNote(row) }}</template>
+          </el-table-column>
           <el-table-column label="操作" width="150" align="center" fixed="right">
             <template #default="{ row }">
-              <el-button
-                type="primary"
-                link
-                :loading="handlingDelayReviewId === row.request_id && handlingDelayReviewAction === 'approve'"
-                @click="handleDelayReview(row, 'approve')"
-              >
-                通过
-              </el-button>
-              <el-button
-                type="danger"
-                link
-                :loading="handlingDelayReviewId === row.request_id && handlingDelayReviewAction === 'reject'"
-                @click="handleDelayReview(row, 'reject')"
-              >
-                驳回
-              </el-button>
+              <template v-if="isDelayRequestPending(row.status)">
+                <el-button
+                  type="primary"
+                  link
+                  :loading="handlingDelayReviewId === row.request_id && handlingDelayReviewAction === 'approve'"
+                  @click="handleDelayReview(row, 'approve')"
+                >
+                  通过
+                </el-button>
+                <el-button
+                  type="danger"
+                  link
+                  :loading="handlingDelayReviewId === row.request_id && handlingDelayReviewAction === 'reject'"
+                  @click="handleDelayReview(row, 'reject')"
+                >
+                  驳回
+                </el-button>
+              </template>
+              <span v-else class="delay-review-finished">已处理</span>
             </template>
           </el-table-column>
         </el-table>
@@ -253,7 +298,9 @@
                   <div class="project-stage">{{ getDelayRequestStartNodeLabel(row) }}</div>
                   <div class="project-batch">{{ buildBatchLabel(row.batch_no, row.batch_name) || '未分批' }}</div>
                 </div>
-                <el-tag type="warning" effect="dark">待审核</el-tag>
+                <el-tag :type="getDelayRequestStatusTag(row.status)" effect="dark">
+                  {{ getDelayRequestStatusText(row.status) }}
+                </el-tag>
               </div>
               <div class="mobile-card-body">
                 <div class="mobile-info">
@@ -268,6 +315,19 @@
                   <span class="label">节点数</span>
                   <span class="value">{{ row.node_count || row.nodes?.length || 0 }}</span>
                 </div>
+                <div class="mobile-info mobile-info--stack" v-if="getDelayRequestNodes(row).length">
+                  <span class="label">涉及节点</span>
+                  <div class="delay-request-node-tags">
+                    <el-tag
+                      v-for="node in getDelayRequestNodes(row)"
+                      :key="node.record_id || node.id || getDelayRequestNodeLabel(node)"
+                      size="small"
+                      effect="plain"
+                    >
+                      {{ getDelayRequestNodeLabel(node) }}
+                    </el-tag>
+                  </div>
+                </div>
                 <div class="mobile-info">
                   <span class="label">申请时间</span>
                   <span class="value">{{ row.created_at || '--' }}</span>
@@ -276,8 +336,20 @@
                   <span class="label">申请原因</span>
                   <span class="value">{{ row.reason || '--' }}</span>
                 </div>
+                <div class="mobile-info">
+                  <span class="label">审核人</span>
+                  <span class="value">{{ formatUser(row.reviewer) || '--' }}</span>
+                </div>
+                <div class="mobile-info" v-if="!isDelayRequestPending(row.status)">
+                  <span class="label">审核时间</span>
+                  <span class="value">{{ row.reviewed_at || row.updated_at || '--' }}</span>
+                </div>
+                <div class="mobile-info mobile-info--stack" v-if="!isDelayRequestPending(row.status)">
+                  <span class="label">审核说明</span>
+                  <span class="value">{{ getDelayRequestReviewNote(row) }}</span>
+                </div>
               </div>
-              <div class="mobile-card-actions">
+              <div v-if="isDelayRequestPending(row.status)" class="mobile-card-actions">
                 <el-button size="small" type="primary" @click="handleDelayReview(row, 'approve')">通过</el-button>
                 <el-button size="small" type="danger" @click="handleDelayReview(row, 'reject')">驳回</el-button>
               </div>
@@ -464,19 +536,67 @@
       </div>
       <div v-if="delayRequestAffectedNodes.length" class="delay-request-preview-list">
         <span
-          v-for="item in delayRequestPreviewNodes"
+          v-for="item in delayRequestAffectedNodes"
           :key="item.recordId"
           class="delay-request-preview-tag"
         >
           {{ item.stageLabel || '--' }}
         </span>
-        <span v-if="delayRequestAffectedNodes.length > delayRequestPreviewNodes.length" class="delay-request-preview-more">
-          等 {{ delayRequestAffectedNodes.length }} 个节点
-        </span>
       </div>
       <template #footer>
         <el-button @click="delayRequestDialogVisible = false">取消</el-button>
         <el-button type="primary" :loading="creatingDelayRequest" @click="handleCreateDelayRequest">提交申请</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog
+      v-model="delayRequestApprovalDialogVisible"
+      title="确认当前节点延期"
+      :width="isMobile ? '96%' : '1080px'"
+      :fullscreen="isMobile"
+      :close-on-click-modal="false"
+    >
+      <div class="delay-request-hint">
+        通过后仅按申请天数更新当前节点的计划完成时间，其他节点不调整。
+      </div>
+      <el-table :data="delayRequestApprovalNodes" border stripe max-height="460">
+        <el-table-column label="主阶段" min-width="130">
+          <template #default="{ row }">{{ row.main_stage_label || '--' }}</template>
+        </el-table-column>
+        <el-table-column label="节点" min-width="170">
+          <template #default="{ row }">{{ row.node_label || '--' }}</template>
+        </el-table-column>
+        <el-table-column label="节点状态" width="110" align="center">
+          <template #default="{ row }">{{ row.status_at_review || row.status_at_request || '--' }}</template>
+        </el-table-column>
+        <el-table-column label="原计划完成" width="175" align="center">
+          <template #default="{ row }">{{ row.before_plan_end || '--' }}</template>
+        </el-table-column>
+        <el-table-column label="申请计划完成" width="175" align="center">
+          <template #default="{ row }">{{ row.requested_plan_end || '--' }}</template>
+        </el-table-column>
+      </el-table>
+      <el-form label-width="92px" style="margin-top: 16px">
+        <el-form-item label="审核说明">
+          <el-input
+            v-model="delayRequestApprovalNote"
+            type="textarea"
+            :rows="2"
+            maxlength="200"
+            show-word-limit
+            placeholder="可填写审核说明"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="delayRequestApprovalDialogVisible = false">取消</el-button>
+        <el-button
+          type="primary"
+          :loading="handlingDelayReviewAction === 'approve'"
+          @click="submitApproveDelayRequest"
+        >
+          确认通过
+        </el-button>
       </template>
     </el-dialog>
     </div>
@@ -505,14 +625,19 @@ const userProfile = ref({
   account: ''
 });
 const projectManagerMembers = ref([]);
+const delayRequestReviewAdminMembers = ref([]);
 const route = useRoute();
 
 const detailDialogVisible = ref(false);
 const submitDialogVisible = ref(false);
 const delayRequestDialogVisible = ref(false);
+const delayRequestApprovalDialogVisible = ref(false);
 const detailRow = ref(null);
 const submitRow = ref(null);
 const delayRequestRow = ref(null);
+const approvingDelayRequest = ref(null);
+const delayRequestApprovalNodes = ref([]);
+const delayRequestApprovalNote = ref('');
 const previewImageItem = ref(null);
 const submitting = ref(false);
 const creatingDelayRequest = ref(false);
@@ -1029,6 +1154,60 @@ const getDelayRequestBusinessOwner = (requestRecord) =>
   getProjectSummary(requestRecord?.project_code, requestRecord?.project_name)?.business_owner ||
   '';
 
+const isDelayRequestReviewAdmin = computed(() =>
+  delayRequestReviewAdminMembers.value.some((member) => userValueMatchesCurrentUser(member))
+);
+
+const canReviewDelayRequest = (requestRecord) =>
+  userValueMatchesCurrentUser(getDelayRequestBusinessOwner(requestRecord));
+
+const getDelayRequestNodes = (requestRecord) => {
+  const nodes = Array.isArray(requestRecord?.nodes) ? requestRecord.nodes : [];
+  const anchorRecordId = String(requestRecord?.anchor_record_id || '').trim();
+  const currentNode = nodes.find(
+    (node) => String(node?.record_id || node?.data_id || '').trim() === anchorRecordId
+  );
+  return currentNode ? [currentNode] : nodes.slice(0, 1);
+};
+
+const getDelayRequestNodeLabel = (node) =>
+  node?.node_label || node?.main_stage_label || node?.name || '--';
+
+const getDelayRequestNodePlan = (node) => {
+  const start = node?.before_plan_start || node?.plan_start || '';
+  const end = node?.before_plan_end || node?.plan_end || '';
+  if (start && end) return `${start} 至 ${end}`;
+  return start || end || '--';
+};
+
+const isDelayRequestPending = (status) => String(status || 'pending').toLowerCase() === 'pending';
+
+const getDelayRequestStatusText = (status) => {
+  const normalized = String(status || '').toLowerCase();
+  if (normalized === 'approved') return '已通过';
+  if (normalized === 'rejected') return '已驳回';
+  if (normalized === 'processing') return '审核中';
+  if (normalized === 'partial_failed') return '部分失败';
+  return '待审核';
+};
+
+const getDelayRequestStatusTag = (status) => {
+  const normalized = String(status || '').toLowerCase();
+  if (normalized === 'approved') return 'success';
+  if (normalized === 'rejected' || normalized === 'partial_failed') return 'danger';
+  return 'warning';
+};
+
+const getDelayRequestReviewNote = (requestRecord) => {
+  if (isDelayRequestPending(requestRecord?.status)) return '--';
+  if (requestRecord?.review_note) return requestRecord.review_note;
+  if (String(requestRecord?.review_result || '').toLowerCase() === 'approved') {
+    const updatedCount = Number(requestRecord?.apply_summary?.updated_count || 0);
+    return updatedCount > 0 ? `已顺延 ${updatedCount} 个节点` : '审核通过';
+  }
+  return '--';
+};
+
 const buildDelayRequestProjectLabel = (requestRecord) => {
   const projectName = normalizeLabel(requestRecord?.project_name) || '未命名项目';
   const projectCode = normalizeLabel(requestRecord?.project_code);
@@ -1036,8 +1215,8 @@ const buildDelayRequestProjectLabel = (requestRecord) => {
 };
 
 const getDelayRequestStartNodeLabel = (requestRecord) => {
-  const firstNode = Array.isArray(requestRecord?.nodes) ? requestRecord.nodes[0] : null;
-  return firstNode?.node_label || firstNode?.main_stage_label || '--';
+  const node = getDelayRequestNodes(requestRecord)[0];
+  return requestRecord?.anchor_node_label || node?.node_label || node?.main_stage_label || '--';
 };
 
 const matchesDelayReviewSearch = (requestRecord, query) => {
@@ -1048,6 +1227,9 @@ const matchesDelayReviewSearch = (requestRecord, query) => {
     buildBatchLabel(requestRecord?.batch_no, requestRecord?.batch_name),
     getDelayRequestStartNodeLabel(requestRecord),
     formatUser(requestRecord?.applicant),
+    formatUser(requestRecord?.reviewer),
+    getDelayRequestStatusText(requestRecord?.status),
+    getDelayRequestReviewNote(requestRecord),
     requestRecord?.reason,
     requestRecord?.created_at
   ]
@@ -1056,13 +1238,24 @@ const matchesDelayReviewSearch = (requestRecord, query) => {
   return pool.some((item) => item.includes(query));
 };
 
+const compareDelayReviewRequests = (left, right) => {
+  const leftPending = String(left?.status || 'pending').toLowerCase() === 'pending';
+  const rightPending = String(right?.status || 'pending').toLowerCase() === 'pending';
+  if (leftPending !== rightPending) return leftPending ? -1 : 1;
+
+  return String(right?.updated_at || right?.created_at || '').localeCompare(
+    String(left?.updated_at || left?.created_at || ''),
+    'zh'
+  );
+};
+
 const delayReviewRows = computed(() => {
   if (!hasUserId.value) return [];
   const query = searchQueryLower.value;
   return delayReviewRequests.value
-    .filter((item) => userValueMatchesCurrentUser(getDelayRequestBusinessOwner(item)))
+    .filter((item) => canReviewDelayRequest(item))
     .filter((item) => matchesDelayReviewSearch(item, query))
-    .sort((a, b) => String(b?.created_at || '').localeCompare(String(a?.created_at || ''), 'zh'));
+    .sort(compareDelayReviewRequests);
 });
 
 const activeRecords = computed(() => {
@@ -1100,14 +1293,14 @@ const viewTotalCount = computed(() =>
 );
 
 const executionSubtitle = computed(() => {
-  if (activeTab.value === 'delayReview') return '当前页显示需要你审核的延期申请';
+  if (activeTab.value === 'delayReview') return '当前页显示可由你审核及已审核的延期申请';
   if (activeTab.value === 'approval') return '当前页显示需要你审批的节点';
   if (activeTab.value === 'completed') return '当前页显示全部项目的已完成节点';
   return '当前页显示当前账号负责的未完成与超期节点';
 });
 
 const emptyText = computed(() => {
-  if (activeTab.value === 'delayReview') return '暂无待审核延期申请';
+  if (activeTab.value === 'delayReview') return '暂无延期申请审核记录';
   if (activeTab.value === 'completed') return '暂无已完成阶段';
   if (!hasUserId.value) return '请通过业务入口访问';
   if (activeTab.value === 'approval') return '暂无待审批阶段';
@@ -1134,36 +1327,16 @@ const parsePositiveInt = (value) => {
   return normalized > 0 ? normalized : 0;
 };
 
-const sameProjectBatch = (row, target) =>
-  Boolean(
-    row &&
-    target &&
-    normalizeLabel(row.projectCode) === normalizeLabel(target.projectCode) &&
-    normalizeLabel(row.projectName) === normalizeLabel(target.projectName) &&
-    normalizeBatchNo(row.batchNo) === normalizeBatchNo(target.batchNo) &&
-    normalizeLabel(row.batchName) === normalizeLabel(target.batchName)
-  );
-
 const delayRequestAffectedNodes = computed(() => {
   if (!delayRequestRow.value?.recordId) return [];
-  const relatedRows = normalizedRecords.value
-    .filter((row) => sameProjectBatch(row, delayRequestRow.value))
-    .sort(compareStagePosition);
-  const startIndex = relatedRows.findIndex((row) => row.recordId === delayRequestRow.value.recordId);
-  if (startIndex < 0) return [];
-  return relatedRows.slice(startIndex);
+  return [delayRequestRow.value];
 });
-
-const delayRequestPreviewNodes = computed(() => delayRequestAffectedNodes.value.slice(0, 8));
 
 const delayRequestScopeHint = computed(() => {
   if (!delayRequestRow.value) return '请选择要申请延期的节点';
   const count = delayRequestAffectedNodes.value.length;
-  if (!count) return '当前批次未找到可延期的后续节点';
-  if (count === 1) {
-    return `将对当前节点申请延期 ${parsePositiveInt(delayRequestForm.value.days) || 1} 天`;
-  }
-  return `将对当前批次从该节点开始的 ${count} 个节点发起延期申请`;
+  if (!count) return '当前节点不可申请延期';
+  return `仅对当前节点申请延期 ${parsePositiveInt(delayRequestForm.value.days) || 1} 天；其他节点不会顺延，如需延期请自行申请。`;
 });
 
 // 弹窗宽度自适应
@@ -1267,6 +1440,17 @@ const loadProjectManagers = async () => {
   }
 };
 
+const loadDelayRequestReviewAdmins = async () => {
+  try {
+    const result = await api.listDelayRequestReviewAdmins();
+    delayRequestReviewAdminMembers.value =
+      result?.code === 200 && Array.isArray(result.data) ? result.data : [];
+  } catch (error) {
+    console.error('加载延期申请管理员成员失败：', error);
+    delayRequestReviewAdminMembers.value = [];
+  }
+};
+
 const loadDelayReviewRequests = async () => {
   if (!hasUserId.value) {
     delayReviewRequests.value = [];
@@ -1274,12 +1458,22 @@ const loadDelayReviewRequests = async () => {
   }
   loading.value = true;
   try {
-    const result = await api.listProjectDelayRequests({ status: 'pending' });
-    if (result?.code === 200 && Array.isArray(result.data)) {
-      delayReviewRequests.value = result.data;
+    const results = await Promise.all(
+      ['pending', 'processing', 'approved', 'rejected', 'partial_failed'].map((status) =>
+        api.listProjectDelayRequests({ status })
+      )
+    );
+    const failedResult = results.find((result) => result?.code !== 200 || !Array.isArray(result.data));
+    if (!failedResult) {
+      const requestsById = new Map();
+      results.flatMap((result) => result.data).forEach((item) => {
+        const key = item?.request_id || `${item?.project_code || ''}:${item?.created_at || ''}`;
+        requestsById.set(key, item);
+      });
+      delayReviewRequests.value = Array.from(requestsById.values());
     } else {
       delayReviewRequests.value = [];
-      ElMessage.error(result?.msg || '加载延期申请失败');
+      ElMessage.error(failedResult?.msg || '加载延期申请记录失败');
     }
   } catch (error) {
     console.error('加载延期申请失败：', error);
@@ -1568,7 +1762,6 @@ const handleCreateDelayRequest = async () => {
     return;
   }
 
-  const reviewerCandidates = affectedNodes.flatMap((node) => [node.creatorRaw, node.updaterRaw]).filter(Boolean);
   const preparedNodes = affectedNodes.map((node) => ({
     record_id: node.recordId,
     main_stage_label: node.mainStageLabel || '',
@@ -1594,7 +1787,6 @@ const handleCreateDelayRequest = async () => {
         name: userProfile.value.name || '',
         account: userProfile.value.account || ''
       },
-      reviewer_candidates: reviewerCandidates,
       nodes: preparedNodes
     });
 
@@ -1608,7 +1800,7 @@ const handleCreateDelayRequest = async () => {
       if (notifyFailedCount > 0 || notificationDisabled || reviewerMissing) {
         const messageParts = ['延期申请已提交'];
         if (notifiedUserCount > 0) {
-          messageParts.push(`已通知 ${notifiedUserCount} 位商务负责人`);
+          messageParts.push(`已通知 ${notifiedUserCount} 位审核人`);
         }
         const ccNotifiedUserCount = Number(responseData.cc_notified_user_count || 0);
         if (ccNotifiedUserCount > 0) {
@@ -1618,10 +1810,10 @@ const handleCreateDelayRequest = async () => {
           messageParts.push(`通知失败 ${notifyFailedCount} 位`);
         }
         if (notificationDisabled) {
-          messageParts.push('未识别到商务负责人或抄送对象');
+          messageParts.push('未识别到审核人或抄送对象');
         }
         if (reviewerMissing && !notificationDisabled) {
-          messageParts.push('未识别到商务负责人，已仅抄送相关人员');
+          messageParts.push('未识别到审核人，已仅抄送相关人员');
         }
         if (notifyErrorSummary) {
           messageParts.push(notifyErrorSummary);
@@ -1630,7 +1822,7 @@ const handleCreateDelayRequest = async () => {
       } else {
         const ccNotifiedUserCount = Number(responseData.cc_notified_user_count || 0);
         const ccText = ccNotifiedUserCount > 0 ? `，并抄送 ${ccNotifiedUserCount} 位相关人员` : '';
-        ElMessage.success(`延期申请已提交，并通知 ${notifiedUserCount} 位商务负责人${ccText}`);
+        ElMessage.success(`延期申请已提交，并通知 ${notifiedUserCount} 位审核人${ccText}`);
       }
       delayRequestDialogVisible.value = false;
       await loadDelayReviewRequests();
@@ -1767,26 +1959,96 @@ const buildCurrentReviewerPayload = () => ({
   email: userProfile.value.email || ''
 });
 
+const openDelayRequestApprovalDialog = (row) => {
+  const nodes = Array.isArray(row?.nodes) ? row.nodes : [];
+  const anchorRecordId = String(row?.anchor_record_id || '').trim();
+  const currentNode = nodes.find((node) => String(node?.record_id || node?.data_id || '').trim() === anchorRecordId) || nodes[0];
+  if (!currentNode) {
+    ElMessage.error('该延期申请未包含可审核的节点');
+    return;
+  }
+
+  approvingDelayRequest.value = row;
+  delayRequestApprovalNodes.value = [currentNode];
+  delayRequestApprovalNote.value = '';
+  delayRequestApprovalDialogVisible.value = true;
+};
+
+const submitApproveDelayRequest = async () => {
+  const row = approvingDelayRequest.value;
+  if (!row?.request_id) {
+    ElMessage.error('缺少延期申请ID');
+    return;
+  }
+
+  handlingDelayReviewId.value = row.request_id;
+  handlingDelayReviewAction.value = 'approve';
+  loading.value = true;
+  try {
+    const result = await api.approveProjectDelayRequest(row.request_id, {
+      reviewer: buildCurrentReviewerPayload(),
+      review_note: delayRequestApprovalNote.value.trim()
+    });
+    if (result?.code === 200) {
+      const summary = result?.data?.summary || {};
+      const failedCount = Number(summary.failed_count || 0);
+      const downstreamNotifiedUserCount = Number(summary.downstream_notified_user_count || 0);
+      const downstreamNotifiedNodeCount = Number(summary.downstream_notified_node_count || 0);
+      const downstreamNotifyFailedCount = Number(summary.downstream_notify_failed_count || 0);
+      const downstreamNotificationDisabled = Boolean(summary.downstream_notification_disabled);
+      const downstreamNotifyError = String(summary.downstream_notify_error_summary || '').trim();
+      const messageParts = failedCount
+        ? [`当前节点延期申请未能更新：失败 ${failedCount} 个节点`]
+        : ['延期申请已通过，已更新当前节点计划完成时间'];
+
+      if (!failedCount && downstreamNotifiedUserCount > 0) {
+        messageParts.push(`已通知 ${downstreamNotifiedUserCount} 位后道责任人`);
+      } else if (!failedCount && downstreamNotifiedNodeCount > 0 && downstreamNotificationDisabled) {
+        messageParts.push('未配置钉钉通知，后道责任人未收到提醒');
+      }
+      if (downstreamNotifyFailedCount > 0) {
+        messageParts.push(`后道通知失败 ${downstreamNotifyFailedCount} 位`);
+      }
+      if (downstreamNotifyError) {
+        messageParts.push(downstreamNotifyError);
+      }
+      const shouldWarn = failedCount || downstreamNotifyFailedCount || downstreamNotificationDisabled || Boolean(downstreamNotifyError);
+      (shouldWarn ? ElMessage.warning : ElMessage.success)(messageParts.join('，'));
+      delayRequestApprovalDialogVisible.value = false;
+      await Promise.all([loadDelayReviewRequests(), loadProgressRecords()]);
+    } else {
+      ElMessage.error(result?.msg || '延期申请审核失败');
+    }
+  } catch (error) {
+    console.error('延期申请审核失败：', error);
+    ElMessage.error(error?.message || '延期申请审核失败');
+  } finally {
+    loading.value = false;
+    handlingDelayReviewId.value = '';
+    handlingDelayReviewAction.value = '';
+  }
+};
+
 const handleDelayReview = async (row, action) => {
   if (!row?.request_id) {
     ElMessage.error('无法审核：缺少延期申请ID');
     return;
   }
-  if (!userValueMatchesCurrentUser(getDelayRequestBusinessOwner(row))) {
-    ElMessage.warning('仅当前项目商务负责人可审核延期申请');
+  if (!canReviewDelayRequest(row)) {
+    ElMessage.warning('仅当前项目销售负责人可审核延期申请');
     return;
   }
 
-  const isApprove = action === 'approve';
-  const confirmText = isApprove
-    ? `确认通过该延期申请，并顺延 ${row.node_count || row.nodes?.length || 0} 个节点 ${row.delay_days || 0} 天吗？`
-    : '确认驳回该延期申请吗？';
+  if (action === 'approve') {
+    openDelayRequestApprovalDialog(row);
+    return;
+  }
 
   try {
-    await ElMessageBox.confirm(confirmText, isApprove ? '通过延期申请' : '驳回延期申请', {
+    await ElMessageBox.confirm('确认驳回该延期申请吗？', '驳回延期申请', {
       confirmButtonText: '确定',
       cancelButtonText: '取消',
-      type: isApprove ? 'warning' : 'warning'
+      type: 'warning'
     });
   } catch (error) {
     return;
@@ -1796,22 +2058,12 @@ const handleDelayReview = async (row, action) => {
   handlingDelayReviewAction.value = action;
   loading.value = true;
   try {
-    const requestPayload = {
+    const result = await api.rejectProjectDelayRequest(row.request_id, {
       reviewer: buildCurrentReviewerPayload()
-    };
-    const result = isApprove
-      ? await api.approveProjectDelayRequest(row.request_id, requestPayload)
-      : await api.rejectProjectDelayRequest(row.request_id, requestPayload);
+    });
     if (result?.code === 200) {
-      if (isApprove) {
-        const summary = result?.data?.summary || {};
-        const updatedCount = Number(summary.updated_count || 0);
-        ElMessage.success(`延期申请已通过，成功顺延 ${updatedCount} 个节点`);
-        await Promise.all([loadDelayReviewRequests(), loadProgressRecords()]);
-      } else {
-        ElMessage.success(result?.msg || '延期申请已驳回');
-        await loadDelayReviewRequests();
-      }
+      ElMessage.success(result?.msg || '延期申请已驳回');
+      await loadDelayReviewRequests();
     } else {
       ElMessage.error(result?.msg || '延期申请审核失败');
     }
@@ -1946,7 +2198,7 @@ watch(
 onMounted(async () => {
   handleResize();
   window.addEventListener('resize', handleResize);
-  await loadProjectManagers();
+  await Promise.all([loadProjectManagers(), loadDelayRequestReviewAdmins()]);
   await syncCurrentUser();
   await Promise.all([loadProgressRecords(), loadDelayReviewRequests()]);
   console.log('Webpage User ID:', userParam.value);
@@ -2136,6 +2388,28 @@ onBeforeUnmount(() => {
   border-radius: 999px;
   padding: 2px 10px;
   width: fit-content;
+}
+
+.delay-request-node-details {
+  padding: 12px 18px;
+  background: #f8fbff;
+}
+
+.delay-request-node-details__title {
+  margin-bottom: 10px;
+  color: #4e5969;
+  font-size: 13px;
+}
+
+.delay-request-node-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.delay-review-finished {
+  color: #909399;
+  font-size: 13px;
 }
 
 .mobile-only {

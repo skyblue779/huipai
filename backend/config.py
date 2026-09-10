@@ -6,27 +6,42 @@ import os
 # Base dir
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# Flask配置
+# Flask 配置
 SECRET_KEY = os.getenv('SECRET_KEY', 'your-secret-key-here')
-DEBUG = os.getenv('DEBUG', True)
+
+
+def _get_bool_env(name, default=False):
+    """Read conventional boolean environment values without treating 'false' as truthy."""
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {'1', 'true', 'yes', 'on'}
+
+
+# Debug must be explicitly enabled outside local development.
+DEBUG = _get_bool_env('DEBUG', False)
 
 # Online-Office API配置
 ONLINE_OFFICE_BASE_URL = 'https://ahyg.online-office.net/openapi/v1'
 # APP_ID = '59e10c88146584ed89e2896b' # 测试服务器环境
 
 
-APP_ID = '5959fa159f014f7b513ac203' # 测试本地环境
-API_KEY = os.getenv('API_KEY', 'PXd9tk8dFi7uH3Yy7MUZSxZDiWWseGgA')  # 测试环境
-DINGDING_CORP_ID = os.getenv('DINGDING_CORP_ID','ding95a80e394156ca1bacaaa37764f94726ddcai4114916469') # 测试环境
+# APP_ID = '5959fa159f014f7b513ac203' # 测试本地环境
+# API_KEY = os.getenv('API_KEY', 'PXd9tk8dFi7uH3Yy7MUZSxZDiWWseGgA')  # 测试环境
+# DINGDING_CORP_ID = os.getenv('DINGDING_CORP_ID','ding95a80e394156ca1bacaaa37764f94726ddcai4114916469') # 测试环境
 
 
 
 
-# APP_ID = '551d2380cc31e1e2072e2ba2' # 生产环境
-# API_KEY = os.getenv('API_KEY', 'YxEXFqMe2bYvpduU7ZRTHzsPvmieUewJ')  # 生产环境
-# DINGDING_CORP_ID = os.getenv('DINGDING_CORP_ID','dingf9588aaa893fd0aef2c783f7214b6d69ddcai4140091355') # 生产环境
+APP_ID = '551d2380cc31e1e2072e2ba2' # 生产环境
+API_KEY = os.getenv('API_KEY', 'YxEXFqMe2bYvpduU7ZRTHzsPvmieUewJ')  # 生产环境
+DINGDING_CORP_ID = os.getenv('DINGDING_CORP_ID','dingf9588aaa893fd0aef2c783f7214b6d69ddcai4140091355') # 生产环境
 PROJECT_MANAGER_ROLE_ID = os.getenv('PROJECT_MANAGER_ROLE_ID', '0a1e428e886add5cc7f96e62')
 DELAY_REQUEST_CC_ROLE_ID = os.getenv('DELAY_REQUEST_CC_ROLE_ID', 'e02f4ca1af47c91e69caee34')
+DELAY_REQUEST_REVIEW_ADMIN_ROLE_ID = os.getenv(
+    'DELAY_REQUEST_REVIEW_ADMIN_ROLE_ID',
+    '1f5d439bb3fa6a0220b8bd3b'
+)
 
 # 阶段配置表
 STAGE_CONFIG_ENTRY_ID = '47c64f56ba43e2a6b8654029'
@@ -41,6 +56,12 @@ COST_TYPE_ENTRY_ID = '30e046f98508908b9ae064ae'
 
 PROJECT_PROGRESS_ENTRY_ID = '11714a488b65fc5074a981cd'
 
+# 延期申请单（主表 + 节点子表单）
+DELAY_REQUEST_ENTRY_ID = os.getenv(
+    'DELAY_REQUEST_ENTRY_ID',
+    'a14a4937b22bd8a6379ddddd'
+)
+
 # 项目预算/成本管理表
 PROJECT_BUDGET_ENTRY_ID = '7235499ba8fd3f91362c04ce'
 
@@ -53,8 +74,15 @@ INSPECTION_ENTRY_ID = '37f8492484812d6cd8781fc8'
 # 样品检测交付现场管理表
 INSPECTION_DELIVERY_ENTRY_ID = 'afe94bb78534c3db2ca05e97'
 
-# CORS配置
-CORS_ORIGINS = ['http://localhost:3000', 'http://localhost:8080', 'http://127.0.0.1:5000']
+# CORS 配置。正式站点与 API 同源；此列表仅用于需要跨域的客户端。
+CORS_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv(
+        'CORS_ORIGINS',
+        'https://www.mjmas.cn,https://mjmas.cn'
+    ).split(',')
+    if origin.strip()
+]
 
 # 请求超时
 REQUEST_TIMEOUT = 30

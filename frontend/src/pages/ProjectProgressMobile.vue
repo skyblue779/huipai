@@ -85,17 +85,18 @@
                 >
                   编辑批次
                 </el-button>
-                <el-button
-                  type="primary"
-                  plain
-                  size="small"
-                  :icon="CirclePlusIcon"
-                  :disabled="!batchTemplateRecords.length"
-                  @click="openCreateBatchDialog"
-                >
-                  新增批次
-                </el-button>
               </template>
+              <el-button
+                v-if="isProjectManager"
+                type="primary"
+                plain
+                size="small"
+                :icon="CirclePlusIcon"
+                :disabled="!batchTemplateRecords.length"
+                @click="openCreateBatchDialog"
+              >
+                新增批次
+              </el-button>
             </div>
           </section>
 
@@ -202,16 +203,6 @@
                         @click="openCreateNodeDialog(node)"
                       >
                         新增
-                      </el-button>
-                      <el-button
-                        v-if="canManageNode(node)"
-                        size="small"
-                        type="primary"
-                        plain
-                        :icon="ClockIcon"
-                        @click="openDelayDialog(node)"
-                      >
-                        延期
                       </el-button>
                       <el-button
                         v-if="canManageNode(node)"
@@ -514,14 +505,8 @@
             <div class="dialog-hint">{{ editNodeOrderHint }}</div>
           </el-form-item>
           <el-form-item label="计划结束时间">
-            <el-date-picker
-              v-model="editForm.planEnd"
-              type="datetime"
-              format="YYYY-MM-DD HH:mm:ss"
-              value-format="YYYY-MM-DD HH:mm:ss"
-              placeholder="请选择时间"
-              class="full-control"
-            />
+            <el-input :model-value="editRow?.planEnd || '--'" disabled />
+            <div class="dialog-hint">如需延后计划结束时间，请由当前节点责任人在项目执行中提交延期申请。</div>
           </el-form-item>
           <el-form-item label="责任人">
             <el-select
@@ -551,52 +536,6 @@
         <template #footer>
           <el-button @click="editDialogVisible = false">取消</el-button>
           <el-button type="primary" :loading="savingEdit" @click="handleSaveEdit">保存</el-button>
-        </template>
-      </el-dialog>
-
-      <el-dialog
-        v-model="delayDialogVisible"
-        title="一键延期"
-        width="100%"
-        :fullscreen="true"
-        append-to-body
-        class="progress-mobile-dialog"
-      >
-        <el-form label-position="top" class="mobile-form">
-          <el-form-item label="起始节点">
-            <el-input :model-value="delayRow?.nodeLabel || delayRow?.name || '--'" disabled />
-          </el-form-item>
-          <el-form-item label="所属批次">
-            <el-input :model-value="currentBatchCard?.label || '--'" disabled />
-          </el-form-item>
-          <el-form-item label="延期天数">
-            <el-input-number
-              v-model="delayForm.days"
-              :min="1"
-              :step="1"
-              :precision="0"
-              controls-position="right"
-              class="full-control"
-              placeholder="请输入延期天数"
-            />
-          </el-form-item>
-        </el-form>
-        <div class="delay-dialog-hint">{{ delayScopeHint }}</div>
-        <div v-if="delayAffectedNodes.length" class="delay-preview-list">
-          <span
-            v-for="item in delayAffectedPreviewNodes"
-            :key="item.recordId || item.id"
-            class="delay-preview-tag"
-          >
-            {{ item.nodeLabel || item.name || '--' }}
-          </span>
-          <span v-if="delayAffectedNodes.length > delayAffectedPreviewNodes.length" class="delay-preview-more">
-            等 {{ delayAffectedNodes.length }} 个节点
-          </span>
-        </div>
-        <template #footer>
-          <el-button @click="delayDialogVisible = false">取消</el-button>
-          <el-button type="primary" :loading="delayingNodes" @click="handleApplyDelay">确认延期</el-button>
         </template>
       </el-dialog>
 
@@ -735,7 +674,6 @@ import { useRoute } from 'vue-router';
 import { ElMessage, ElMessageBox, ElConfigProvider } from 'element-plus';
 import {
   CirclePlus as CirclePlusIcon,
-  Clock as ClockIcon,
   Delete as DeleteIcon,
   Download as DownloadIcon,
   Edit as EditIcon,
@@ -747,7 +685,6 @@ import zhCn from 'element-plus/es/locale/lang/zh-cn';
 import api from '../api/client';
 import { useProjectProgressPermissions } from '../composables/useProjectProgressPermissions';
 import {
-  addDaysToDate,
   buildBatchCardLabel,
   buildBatchCardSubLabel,
   buildBatchKey,
@@ -773,7 +710,6 @@ import {
   normalizeNode,
   parseBatchNoNumber,
   parsePositiveInt,
-  shiftPlanTimeValue,
   stripAccountSuffix,
   updatePlanTimeValue
 } from '../utils/projectProgress';
@@ -803,17 +739,11 @@ const buildEmptyEditForm = () => ({
   approverId: ''
 });
 
-const buildEmptyDelayForm = () => ({
-  days: 1
-});
-
 const route = useRoute();
 const {
-  isProjectManager,
+  isProjectManager: isGlobalProjectManager,
   loadProjectManagers,
-  syncCurrentUser,
-  ensureProjectManagerAction,
-  canManageNode
+  syncCurrentUser
 } = useProjectProgressPermissions(route);
 
 const projectLoading = ref(false);
@@ -841,10 +771,6 @@ const editDialogVisible = ref(false);
 const savingEdit = ref(false);
 const editForm = ref(buildEmptyEditForm());
 const editRow = ref(null);
-const delayDialogVisible = ref(false);
-const delayingNodes = ref(false);
-const delayForm = ref(buildEmptyDelayForm());
-const delayRow = ref(null);
 const members = ref([]);
 const memberLoading = ref(false);
 const createBatchDialogVisible = ref(false);
@@ -946,6 +872,18 @@ const currentProject = computed(() => {
     records: progressRecords.value
   };
 });
+
+// 恢复原有规则：全局项目管理员可管理全部项目进度。
+const isProjectManager = isGlobalProjectManager;
+
+const ensureProjectManagerAction = (message = '仅项目管理员可操作') => {
+  if (isProjectManager.value) return true;
+  ElMessage.warning(message);
+  return false;
+};
+
+const canManageNode = (row) =>
+  Boolean(isProjectManager.value && row && !row.isGroup && row.recordId && row.mainStageLabel);
 
 const batchCards = computed(() => {
   const grouped = new Map();
@@ -1234,29 +1172,6 @@ const editNodeOrderHint = computed(() => {
   return `保存后会按新的序号重排当前批次该主阶段的 ${count} 个节点`;
 });
 
-const delayAffectedNodes = computed(() => {
-  if (!canManageNode(delayRow.value)) return [];
-  const startIndex = currentBatchNodes.value.findIndex(
-    (node) => node.recordId && node.recordId === delayRow.value.recordId
-  );
-  if (startIndex < 0) return [];
-  return currentBatchNodes.value
-    .slice(startIndex)
-    .filter((node) => canManageNode(node));
-});
-
-const delayAffectedPreviewNodes = computed(() => delayAffectedNodes.value.slice(0, 8));
-
-const delayScopeHint = computed(() => {
-  if (!delayRow.value) return '请选择要延期的节点';
-  const count = delayAffectedNodes.value.length;
-  if (!count) return '当前批次未找到可延期的后续节点';
-  if (count === 1) {
-    return `将顺延当前节点的计划时间 ${parsePositiveInt(delayForm.value.days) || 1} 天`;
-  }
-  return `将顺延当前批次从该节点开始的 ${count} 个节点，后续节点会一并延后`;
-});
-
 const memberOptions = computed(() =>
   members.value.map((item) => ({
     id: item.user_id,
@@ -1412,12 +1327,6 @@ watch(
     }
   }
 );
-
-watch(delayDialogVisible, (visible) => {
-  if (visible) return;
-  delayRow.value = null;
-  delayForm.value = buildEmptyDelayForm();
-});
 
 watch(createBatchDialogVisible, (visible) => {
   if (visible) return;
@@ -1877,10 +1786,6 @@ const handleSaveEdit = async () => {
         ? updatePlanTimeValue(editRow.value.rawPlanTime, nextPlanStart, nextPlanEnd || editRow.value.planEndRaw)
         : '';
     }
-    if (nextPlanEnd !== originalPlanRange.value.planEnd) {
-      payload.plan_finishtime = nextPlanEnd || '';
-    }
-
     const currentExecutorIds = normalizeIdList(editForm.value.executorIds);
     const originalIds = normalizeIdList(originalExecutorIds.value);
     if (JSON.stringify(currentExecutorIds) !== JSON.stringify(originalIds)) {
@@ -1986,134 +1891,6 @@ const handleDeleteNode = async (row) => {
   } catch (error) {
     console.error('删除节点失败：', error);
     ElMessage.error('删除节点失败');
-  }
-};
-
-const openDelayDialog = (row) => {
-  if (!canManageNode(row)) {
-    ElMessage.warning('仅支持对具体节点执行延期');
-    return;
-  }
-  delayRow.value = row;
-  delayForm.value = buildEmptyDelayForm();
-  delayDialogVisible.value = true;
-};
-
-const buildDelayPayload = (node, days) => {
-  const payload = {};
-  const shiftedPlanTime = shiftPlanTimeValue(node.rawPlanTime, days);
-  const shiftedPlanEnd = addDaysToDate(node.planEndRaw, days, true);
-
-  if (JSON.stringify(shiftedPlanTime) !== JSON.stringify(node.rawPlanTime)) {
-    payload.plan_time = shiftedPlanTime;
-  }
-  if (node.planEndRaw && shiftedPlanEnd && shiftedPlanEnd !== formatDateTime(node.planEndRaw)) {
-    payload.plan_finishtime = shiftedPlanEnd;
-  }
-  return payload;
-};
-
-const handleApplyDelay = async () => {
-  if (!canManageNode(delayRow.value)) {
-    ElMessage.error('请选择要延期的节点');
-    return;
-  }
-
-  const delayDays = parsePositiveInt(delayForm.value.days);
-  if (!delayDays) {
-    ElMessage.warning('请输入大于 0 的延期天数');
-    return;
-  }
-
-  const affectedNodes = delayAffectedNodes.value;
-  if (!affectedNodes.length) {
-    ElMessage.warning('当前没有可延期的节点');
-    return;
-  }
-
-  delayingNodes.value = true;
-  let skippedCount = 0;
-  try {
-    const preparedNodes = affectedNodes.reduce((list, node) => {
-      const payload = buildDelayPayload(node, delayDays);
-      if (!node.recordId || !Object.keys(payload).length) {
-        skippedCount += 1;
-        return list;
-      }
-      list.push({
-        record_id: node.recordId,
-        main_stage_label: node.mainStageLabel || '',
-        node_label: node.nodeLabel || node.name || '',
-        before_plan_start: node.planStart || '',
-        after_plan_start: addDaysToDate(node.planStartRaw, delayDays),
-        before_plan_end: node.planEnd || '',
-        after_plan_end: addDaysToDate(node.planEndRaw, delayDays, true),
-        executor_ids: getExecutorIds(node.executorRaw),
-        executor_raw: node.executorRaw,
-        payload
-      });
-      return list;
-    }, []);
-
-    if (!preparedNodes.length) {
-      ElMessage.warning('所选节点及后续节点暂无可延期的计划日期');
-      return;
-    }
-
-    const result = await api.delayProjectProgress({
-      project_name: currentProject.value.projectName || delayRow.value.projectName || '',
-      project_code: currentProject.value.projectCode || delayRow.value.projectCode || '',
-      batch_no: currentBatchDescriptor.value?.batchNo || delayRow.value.batchNo || '',
-      batch_name: currentBatchDescriptor.value?.batchName || delayRow.value.batchName || '',
-      delay_days: delayDays,
-      nodes: preparedNodes
-    });
-
-    const summary = result?.data || {};
-    const updatedCount = Number(summary.updated_count || 0);
-    const failedCount = Number(summary.failed_count || 0);
-    const skippedTotal = skippedCount + Number(summary.skipped_count || 0);
-    const notifiedUserCount = Number(summary.notified_user_count || 0);
-    const notifyFailedCount = Number(summary.notify_failed_count || 0);
-    const notificationDisabled = Boolean(summary.notification_disabled);
-    const notifyErrorSummary = String(summary.notify_error_summary || '').trim();
-
-    if (updatedCount === 0) {
-      ElMessage.error('延期失败');
-      return;
-    }
-
-    if (failedCount > 0 || skippedTotal > 0 || notifyFailedCount > 0 || notificationDisabled) {
-      const messageParts = [`延期完成：成功 ${updatedCount} 个节点`];
-      if (failedCount > 0) {
-        messageParts.push(`失败 ${failedCount} 个`);
-      }
-      if (skippedTotal > 0) {
-        messageParts.push(`跳过 ${skippedTotal} 个`);
-      }
-      if (notifiedUserCount > 0) {
-        messageParts.push(`已通知 ${notifiedUserCount} 位责任人`);
-      } else if (notificationDisabled) {
-        messageParts.push('钉钉通知未发送');
-      }
-      if (notifyFailedCount > 0) {
-        messageParts.push(`通知失败 ${notifyFailedCount} 位`);
-      }
-      if (notifyErrorSummary) {
-        messageParts.push(notifyErrorSummary);
-      }
-      ElMessage.warning(messageParts.join('，'));
-    } else {
-      ElMessage.success(`延期成功：已顺延 ${updatedCount} 个节点 ${delayDays} 天，并通知 ${notifiedUserCount} 位责任人`);
-    }
-
-    delayDialogVisible.value = false;
-    await loadProjectNodes(currentBatchKey.value);
-  } catch (error) {
-    console.error('延期失败：', error);
-    ElMessage.error('延期失败');
-  } finally {
-    delayingNodes.value = false;
   }
 };
 

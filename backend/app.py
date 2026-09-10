@@ -4,6 +4,7 @@
 from flask import Flask, jsonify, send_from_directory
 from flask_cors import CORS
 import logging
+import os
 from config import DEBUG, CORS_ORIGINS, SECRET_KEY, UPLOAD_DIR, PUBLIC_BASE_URL, FILE_PUBLIC_BASE_URL, API_KEY
 from api.stage_config import stage_bp
 from api.project import project_bp
@@ -111,15 +112,12 @@ def create_app():
             'msg': '服务器内部错误'
         }), 500
     
-    logger.info("Flask 应用创建完成")
-    logger.info("应用配置 API_KEY: %s", app.config.get('API_KEY'))
+    logger.info("Flask 应用创建完成（API_KEY 已配置: %s）", bool(app.config.get('API_KEY')))
     return app
 
 
 if __name__ == '__main__':
     app = create_app()
-    app.run(host='172.16.0.158', port=9989, debug=DEBUG)
-    # app.run(host='localhost', port=9989, debug=DEBUG)
-    # 测试环境
-    # app.run(host='127.0.0.1', port=9966)
-    # 生产环境
+    host = os.getenv('HOST', '127.0.0.1')
+    port = int(os.getenv('PORT', '9966'))
+    app.run(host=host, port=port, debug=DEBUG)

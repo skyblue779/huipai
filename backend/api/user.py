@@ -4,7 +4,7 @@ User directory API routes.
 import logging
 from flask import Blueprint, jsonify
 from api.online_office import api_client
-from config import PROJECT_MANAGER_ROLE_ID
+from config import PROJECT_MANAGER_ROLE_ID, DELAY_REQUEST_REVIEW_ADMIN_ROLE_ID
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +71,6 @@ def list_users():
             'code': 500,
             'msg': str(e)
         }), 500
-
 
 @user_bp.route('/info/<user_id>', methods=['GET'])
 def get_user_info(user_id):
@@ -165,6 +164,26 @@ def list_project_managers():
         })
     except Exception as e:
         logger.error(f"list_project_managers failed: {e}")
+        return jsonify({
+            'code': 500,
+            'msg': str(e)
+        }), 500
+
+
+@user_bp.route('/delay-request-review-admins', methods=['GET'])
+def list_delay_request_review_admins():
+    """List members who may review project delay requests as administrators."""
+    try:
+        users = api_client.list_role_members(DELAY_REQUEST_REVIEW_ADMIN_ROLE_ID)
+        return jsonify({
+            'code': 200,
+            'msg': 'success',
+            'data': users,
+            'total': len(users),
+            'role_id': DELAY_REQUEST_REVIEW_ADMIN_ROLE_ID
+        })
+    except Exception as e:
+        logger.error(f"list_delay_request_review_admins failed: {e}")
         return jsonify({
             'code': 500,
             'msg': str(e)
